@@ -15,7 +15,8 @@ set_capability(sys.argv[1], sys.argv[2])
 print('{"ok":true}')
 PY
     ;;
-  lock) PYTHONPATH="$REPO" python3 -c 'from core.trusted_control import lock; lock(); print("{"ok":true,"master_lock":true}")' ;;
+  lock) PYTHONPATH="$REPO" python3 -c 'import json; from core.trusted_control import lock; lock(); print(json.dumps({"ok":true,"master_lock":true}))' ;;
+  unlock) [ "${2:-}" = "UNLOCK" ] || exit 2; PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy,save_policy,set_master_lock; from core.trusted_control import _audit; p=load_policy(); set_master_lock(p,False); save_policy(p); _audit("unlock","ALLOW","local_ui_confirmed"); print(json.dumps({"ok":true,"master_lock":false}))' ;;
   start) exec "$HOME/po_recorder/tools/connect_mcp.sh" ;;
   restart) exec env MCP_FORCE_RESTART=1 "$HOME/po_recorder/tools/connect_mcp.sh" ;;
   audit)
