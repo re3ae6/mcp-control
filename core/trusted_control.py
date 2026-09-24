@@ -51,12 +51,16 @@ def lock() -> None:
     _audit("lock", "ALLOW")
 
 
-def unlock() -> None:
-    """Local UI-only unlock primitive; never exposed through dispatch/MCP."""
+def unlock(confirmation: str) -> None:
+    """Local interactive recovery only; never exposed through dispatch/MCP."""
+    import sys
+    if confirmation != "UNLOCK" or not sys.stdin.isatty():
+        _audit("unlock", "DENY", "interactive_confirmation_required")
+        raise PermissionError("trusted_control_unlock_requires_local_confirmation")
     policy = load_policy()
     set_master_lock(policy, False)
     save_policy(policy)
-    _audit("unlock", "ALLOW", "local_ui_only")
+    _audit("unlock", "ALLOW", "local_ui_confirmed")
 
 
 def dispatch(action: str, **kwargs: Any) -> Any:
