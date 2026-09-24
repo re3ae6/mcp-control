@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.enforcer import check, record
+from core.command_guard import authorize_command
 from termux_mcp import mcp_core, mcp_server
 
 
@@ -36,6 +37,12 @@ _original = mcp_core.call_tool
 
 def guarded_call(session, name, params, on_progress=None):
     cap = _capability(name)
+    if name == "run" and isinstance(params, dict):
+        command = params.get("cmd", params.get("command", ""))
+        ok, reason = authorize_command(command)
+        if not ok:
+            record("dangerous.outside_allowlist", f"mcp.tools/call:{name}", "DENY_COMMAND")
+            return {"content": [{"type": "text", "text": f"MCP CONTROL: command denied: {reason}"}], "isError": True}
     d = check(cap)
     if not d.allowed:
         result = "ASK" if d.requires_approval else "DENY"
