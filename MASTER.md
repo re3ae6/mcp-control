@@ -96,7 +96,44 @@ Exactly eight areas:
 7. Device
 8. Dangerous
 
-## 10. Audit
+UI requirements:
+- Persistent Connect / Refresh action.
+- Persistent Master Lock control.
+- Green/red status indicators for MCP, Proxy and Tunnel.
+- Yellow status for connecting/waiting.
+- Capability rows expose their current DENY / ASK / ALLOW state.
+- UI must remain usable in offline/bridge-failure mode.
+- Tabs are functional control areas, not decorative navigation.
+
+## 10. Android Bridge
+- Android package: `com.re3ae6.mcpcontrol`.
+- Minimum SDK 29; target/compile SDK 35.
+- Bridge invokes only the fixed local `tools/mobile_control.sh` entrypoint through Termux RUN_COMMAND.
+- No arbitrary shell command field is exposed by the Android UI.
+- No API key is embedded in the APK or repository.
+- Current bridge commands are limited to policy/status/set/lock/unlock/start/restart/audit.
+- Termux bridge failures must leave the app open in offline mode.
+
+## 11. Mobile Control
+`tools/mobile_control.sh` is the narrow Android-to-Termux control surface.
+Current actions:
+- `status`
+- `policy`
+- `set <capability> <deny|ask|allow>`
+- `lock`
+- local-confirmed `unlock UNLOCK`
+- `start`
+- `restart`
+- `audit`
+
+Connection status JSON uses:
+- `connected`
+- `label`
+- `mcp`
+- `proxy`
+- `tunnel`
+
+## 12. Audit
 Security decisions are recorded under:
 `~/.config/mcp-control/`
 
@@ -107,7 +144,7 @@ Files:
 
 Sensitive control files use restrictive permissions.
 
-## 11. Current Verified State
+## 13. Current Verified State
 Verified:
 - Python compilation passes.
 - `git diff --check` passes.
@@ -122,17 +159,23 @@ Verified:
 - Gateway replay rejection passes.
 - Gateway MASTER LOCK rejection passes.
 - Final tested MASTER LOCK state is TRUE.
+- Android debug build pipeline is configured in GitHub Actions.
+- Termux RUN_COMMAND bridge source is present.
+- Android UI has all eight required areas.
+- MCP / Proxy / Tunnel status indicators are wired to the actual connection-status keys.
 
-## 12. Known Remaining Hardening
+## 14. Known Remaining Hardening
 - Replace coarse tool-to-capability mappings with explicit granular mappings.
 - Harden the trusted control boundary.
 - Add dedicated administrative authentication/authorization appropriate for the local Android environment.
 - Add automated regression tests.
 - Review audit integrity and rotation.
 - Review all network and device capabilities.
+- Ensure every displayed capability has an intentional action/mapping; empty groups must not masquerade as functional controls.
+- Replace fixed-delay bridge polling with robust result correlation/timeout handling.
 - Keep dangerous capabilities explicitly denied unless deliberately authorized.
 
-## 13. Non-Negotiable Rules
+## 15. Non-Negotiable Rules
 - Never disable MASTER LOCK merely to bypass a test.
 - Never treat ASK as ALLOW.
 - Never execute an unknown capability.
@@ -142,7 +185,7 @@ Verified:
 - Never allow dangerous shell escape through wrappers or interpolation.
 - Keep TRADING / unrelated external automation disabled by default.
 
-## 14. Definition of Done
+## 16. Definition of Done
 The control plane is complete only when:
 - every MCP tool has an explicit capability mapping;
 - all normal execution crosses the gateway;
@@ -154,11 +197,20 @@ The control plane is complete only when:
 - automated security regression tests pass;
 - Git history contains only intentional, reviewed changes.
 
-## 15. v2 Build Progress
+## 17. v2 Build Progress
 - Control UI implemented as eight-area granular permission console.
-- Gateway now supports multi-capability decisions per MCP tool.
+- Gateway supports multi-capability decisions per MCP tool.
 - File operations require both operation capability and path-scope capability.
 - Terminal command Git operations are checked against dedicated git capabilities.
-- Unknown tools remain fail-closed to dangerous.outside_allowlist.
-- Launcher: tools/mcp_control.sh
+- Unknown tools remain fail-closed to `dangerous.outside_allowlist`.
+- Launcher: `tools/mcp_control.sh`.
+- Android app bridge: `tools/mobile_control.sh`.
+- Android status lights now consume the actual `mcp/proxy/tunnel` status fields.
+- The next implementation step is to make each of the eight areas expose concrete, correctly mapped actions rather than policy-only rows.
+
+## 18. Latest UI Fixes
+- Fixed Android bridge source formatting/build issue.
+- Fixed connection-status field mismatch that caused false red indicators.
+- Fixed action busy-state handling so delayed refreshes are not permanently blocked.
+- Connect / Refresh remains available after connection attempts.
 - MASTER LOCK remains the global effective DENY override.
