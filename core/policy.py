@@ -57,3 +57,21 @@ def get_state(policy: dict[str, Any], capability_id: str) -> str:
 def decision(policy: dict[str, Any], capability_id: str) -> str:
     """Return the effective decision: deny, ask, or allow."""
     return get_state(policy, capability_id)
+
+
+def capability_ids(policy: dict[str, Any]) -> list[str]:
+    return [item["id"] for group in policy.get("capabilities", {}).values() for item in group]
+
+
+def all_capabilities(policy: dict[str, Any]) -> list[dict[str, Any]]:
+    return [item for group in policy.get("capabilities", {}).values() for item in group]
+
+
+def require(policy: dict[str, Any], capability_id: str) -> None:
+    """Enforce a capability. Raises PermissionError unless explicitly allowed."""
+    state = decision(policy, capability_id)
+    if state == "allow":
+        return
+    if state == "ask":
+        raise PermissionError(f"approval_required:{capability_id}")
+    raise PermissionError(f"access_denied:{capability_id}")
