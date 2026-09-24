@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Conservative command/path boundary for terminal.bash."""
 from __future__ import annotations
-import os
-import re
-import shlex
+import os, re, shlex
 from pathlib import Path
 
 ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control"))
-BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev")
+BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev", "/data/data")
 DANGEROUS = {"rm", "rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
 SHELL_WRAPPERS = {"sh", "bash", "zsh", "fish"}
+INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"}
+CODE_FLAGS = {"-c", "-e", "--eval", "--command"}
 
 def _inside(path: Path) -> bool:
     rp = path.resolve()
@@ -28,8 +28,11 @@ def authorize_command(command: str) -> tuple[bool, str]:
     if not tokens: return False, "empty command"
     for i, tok in enumerate(tokens):
         base = Path(tok).name
-        if base in SHELL_WRAPPERS and i + 1 < len(tokens) and tokens[i + 1] in {"-c", "-lc", "-ic"}: return False, "nested shell execution is not allowed"
+        if base in SHELL_WRAPPERS and i + 1 < len(tokens) and tokens[i + 1] in {"-c", "-lc", "-ic"}:
+            return False, "nested shell execution is not allowed"
         if base in DANGEROUS: return False, f"dangerous command requires its dedicated capability: {base}"
+        if base in INTERPRETERS and i + 1 < len(tokens) and tokens[i + 1] in CODE_FLAGS:
+            return False, f"inline interpreter code requires its dedicated capability: {base} {tokens[i+1]}"
     for tok in tokens:
         if not _looks_like_path(tok): continue
         expanded = os.path.expanduser(tok)
