@@ -41,8 +41,8 @@ def guarded_call(session, name, params, on_progress=None):
         result = "ASK" if d.requires_approval else "DENY"
         record(cap, f"mcp.tools/call:{name}", result)
         if d.requires_approval:
-            return {"text": f"MCP CONTROL: approval required for {cap} (tool={name})", "is_error": True}
-        return {"text": f"MCP CONTROL: access denied ({cap}); master lock/policy is active", "is_error": True}
+            return {"content": [{"type": "text", "text": f"MCP CONTROL: approval required for {cap} (tool={name})"}], "isError": True}
+        return {"content": [{"type": "text", "text": f"MCP CONTROL: access denied ({cap}); master lock/policy is active"}], "isError": True}
     record(cap, f"mcp.tools/call:{name}", "ALLOW")
     return _original(session, name, params, on_progress=on_progress)
 
