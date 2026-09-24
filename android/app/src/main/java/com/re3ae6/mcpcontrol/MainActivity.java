@@ -42,16 +42,21 @@ public class MainActivity extends Activity {
     }
 
     private void refresh(){
-        McpBridge.run(this,"status"); McpBridge.run(this,"policy");
-        handler.postDelayed(this::read,700);
+        McpBridge.run(this,"policy");
+        handler.postDelayed(this::readPolicyThenStatus,700);
     }
 
-    private void read(){
+    private void readPolicyThenStatus(){
         String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
-        if(out.isEmpty()){ render(); return; }
+        try { JSONObject o=new JSONObject(out); if(o.has("master_lock")) policy=o; } catch(Exception ignored){}
+        McpBridge.run(this,"status");
+        handler.postDelayed(this::readStatus,700);
+    }
+
+    private void readStatus(){
+        String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
         try{
             JSONObject o=new JSONObject(out);
-            if(o.has("master_lock")) policy=o;
             if(o.has("connected")) status.setText("MCP CONTROL  •  "+
                 (o.optBoolean("connected")?"CONNECTED":"DISCONNECTED")+
                 "   MCP="+o.optString("mcp")+"   Proxy="+o.optString("proxy")+
@@ -67,11 +72,10 @@ public class MainActivity extends Activity {
         if("overview".equals(group)){
             content.addView(tv(locked?"MASTER LOCK: ON  •  effective DENY":"MASTER LOCK: OFF",20));
             content.addView(btn("Refresh status",v->refresh()));
-            content.addView(btn("Start MCP",v->{McpBridge.run(this,"start");refresh();}));
-            content.addView(btn("Restart MCP",v->{McpBridge.run(this,"restart");refresh();}));
-            content.addView(btn("Lock everything",v->{McpBridge.run(this,"lock");refresh();}));
-            content.addView(btn("Audit",v->{McpBridge.run(this,"audit");refresh();}));
-            content.addView(tv("Default DENY. No Android device permissions are requested.",14));
+            content.addView(btn("Start MCP",v->{McpBridge.run(this,"start"); handler.postDelayed(this::refresh,1500);}));
+            content.addView(btn("Restart MCP",v->{McpBridge.run(this,"restart"); handler.postDelayed(this::refresh,1500);}));
+            content.addView(btn("Lock everything",v->{McpBridge.run(this,"lock"); handler.postDelayed(this::refresh,500);}));
+            content.addView(tv("Default DENY. Unlock remains local-UI-only and is not exposed here.",14));
             return;
         }
         JSONObject caps=policy.optJSONObject("capabilities");
