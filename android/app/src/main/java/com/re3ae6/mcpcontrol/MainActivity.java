@@ -3,8 +3,10 @@ package com.re3ae6.mcpcontrol;
 import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
@@ -16,230 +18,168 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private final Handler handler = new Handler();
-    private LinearLayout content;
-    private TextView status;
+    private LinearLayout content, indicatorRow;
+    private TextView status, masterState;
     private JSONObject policy;
-    private String group = "overview";
-    private boolean busy = false;
+    private String group="overview";
+    private boolean busy=false;
     private final String[] groups={"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels={"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
 
-    @Override public void onCreate(Bundle b){
-        super.onCreate(b);
-        buildUi();
-        renderOffline();
+    private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+    private TextView text(String s,int size,int color){
+        TextView t=new TextView(this); t.setText(s); t.setTextSize(size); t.setTextColor(color);
+        t.setPadding(dp(14),dp(7),dp(14),dp(7)); return t;
     }
-
-    private TextView tv(String s,int size){
-        TextView t=new TextView(this);
-        t.setText(s); t.setTextSize(size); t.setTextColor(Color.rgb(30,41,59));
-        t.setPadding(18,10,18,10);
-        return t;
-    }
-
     private TextView title(String s){
-        TextView t=tv(s,20);
-        t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        t.setPadding(18,16,18,8);
-        return t;
+        TextView t=text(s,21,Color.rgb(15,23,42)); t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        t.setPadding(dp(14),dp(18),dp(14),dp(5)); return t;
+    }
+    private Button button(String s,View.OnClickListener l){
+        Button b=new Button(this); b.setText(s); b.setTextSize(14); b.setAllCaps(false);
+        b.setMinHeight(dp(48)); b.setOnClickListener(l); return b;
+    }
+    private TextView dot(String label,int color){
+        TextView d=text("●  "+label,13,color); d.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return d;
     }
 
-    private Button btn(String s,View.OnClickListener l){
-        Button b=new Button(this);
-        b.setText(s); b.setTextSize(14); b.setAllCaps(false);
-        b.setMinHeight(52); b.setPadding(16,4,16,4);
-        b.setOnClickListener(l);
-        return b;
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b); buildUi(); renderOffline();
     }
 
     private void buildUi(){
-        LinearLayout root=new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(245,247,250));
+        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(246,248,251));
 
-        LinearLayout header=new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(10,10,10,6);
-        header.setBackgroundColor(Color.rgb(17,24,39));
+        LinearLayout header=new LinearLayout(this); header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(10),dp(10),dp(10),dp(8)); header.setBackgroundColor(Color.rgb(15,23,42));
 
-        TextView app=tv("MCP CONTROL",20);
-        app.setTextColor(Color.WHITE);
-        app.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        app.setPadding(12,8,12,2);
-        header.addView(app);
+        TextView brand=text("MCP  CONTROL",22,Color.WHITE);
+        brand.setTypeface(Typeface.DEFAULT,Typeface.BOLD); brand.setPadding(dp(10),dp(4),dp(10),0);
+        header.addView(brand);
 
-        status=tv("READY  •  offline until connected",13);
-        status.setTextColor(Color.rgb(187,247,208));
-        status.setPadding(12,2,12,8);
+        status=text("●  READY  •  NOT CONNECTED",13,Color.rgb(250,204,21));
+        status.setTypeface(Typeface.DEFAULT,Typeface.BOLD); status.setPadding(dp(10),0,dp(10),dp(8));
         header.addView(status);
 
+        indicatorRow=new LinearLayout(this); indicatorRow.setOrientation(LinearLayout.HORIZONTAL);
+        indicatorRow.addView(dot("MCP",Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
+        indicatorRow.addView(dot("PROXY",Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
+        indicatorRow.addView(dot("TUNNEL",Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
+        header.addView(indicatorRow);
+
         LinearLayout actions=new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        Button connect=btn("Connect / Refresh",v->refresh());
-        Button lock=btn("Lock",v->lockAll());
-        actions.addView(connect,new LinearLayout.LayoutParams(0,52,1));
-        actions.addView(lock,new LinearLayout.LayoutParams(0,52,1));
+        Button connect=button("↻  Connect / Refresh",v->refresh());
+        Button lock=button("🔒  Lock",v->lockAll());
+        actions.addView(connect,new LinearLayout.LayoutParams(0,dp(52),1));
+        actions.addView(lock,new LinearLayout.LayoutParams(0,dp(52),1));
         header.addView(actions);
         root.addView(header);
 
-        HorizontalScrollView hs=new HorizontalScrollView(this);
-        hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout tabbar=new LinearLayout(this);
+        HorizontalScrollView tabs=new HorizontalScrollView(this); tabs.setHorizontalScrollBarEnabled(false);
+        LinearLayout bar=new LinearLayout(this);
         for(int i=0;i<groups.length;i++){
-            final String g=groups[i];
-            Button b=btn(labels[i],v->{group=g;render();});
-            tabbar.addView(b,new LinearLayout.LayoutParams(132,52));
+            final String g=groups[i]; Button b=button(labels[i],v->{group=g;render();});
+            bar.addView(b,new LinearLayout.LayoutParams(dp(116),dp(50)));
         }
-        hs.addView(tabbar);
-        root.addView(hs);
+        tabs.addView(bar); root.addView(tabs);
 
-        ScrollView sv=new ScrollView(this);
-        content=new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(8,8,8,24);
-        sv.addView(content);
-        root.addView(sv,new LinearLayout.LayoutParams(-1,0,1));
+        ScrollView scroll=new ScrollView(this);
+        content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(8),0,dp(8),dp(24)); scroll.addView(content);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
     }
 
     private void renderOffline(){
-        status.setText("READY  •  offline until connected");
+        status.setText("●  READY  •  NOT CONNECTED"); status.setTextColor(Color.rgb(250,204,21));
         content.removeAllViews();
-        content.addView(title("MCP Control"));
-        content.addView(tv("Secure local controller • default DENY",16));
-        content.addView(tv("Connect is always available in the header.",14));
-        content.addView(tv("No Termux command is sent automatically.",14));
-        content.addView(tv("Use Connect / Refresh to load the current policy and status.",14));
+        content.addView(title("System Overview"));
+        content.addView(text("Secure local controller",15,Color.rgb(71,85,105)));
+        content.addView(card("MASTER LOCK","ON  •  EFFECTIVE DENY",Color.rgb(239,68,68)));
+        content.addView(text("MCP, Proxy and Tunnel status will appear here after Connect / Refresh.",14,Color.rgb(71,85,105)));
+        content.addView(button("Connect / Refresh",v->refresh()));
+    }
+
+    private TextView card(String name,String value,int color){
+        TextView t=text(name+"\n"+value,15,Color.rgb(15,23,42)); t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        GradientDrawable bg=new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(dp(14)); bg.setStroke(dp(1),color);
+        t.setBackground(bg); t.setPadding(dp(16),dp(14),dp(16),dp(14));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(74)); p.setMargins(0,dp(7),0,dp(7)); t.setLayoutParams(p); return t;
     }
 
     private void clearOutput(){
-        getSharedPreferences("bridge",MODE_PRIVATE).edit()
-            .putString("stdout","").putString("stderr","").putInt("exit",-1).apply();
+        getSharedPreferences("bridge",MODE_PRIVATE).edit().putString("stdout","").putString("stderr","").putInt("exit",-1).apply();
     }
 
     private void refresh(){
-        if(busy) return;
-        busy=true;
-        status.setText("CONNECTING  •  reading policy…");
-        clearOutput();
-        McpBridge.run(this,"policy");
-        handler.postDelayed(this::readPolicyThenStatus,900);
+        if(busy)return; busy=true; status.setText("●  CONNECTING  •  PLEASE WAIT"); status.setTextColor(Color.rgb(250,204,21));
+        clearOutput(); McpBridge.run(this,"policy"); handler.postDelayed(this::readPolicy,900);
     }
 
-    private void readPolicyThenStatus(){
+    private void readPolicy(){
         String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
-        try {
-            JSONObject o=new JSONObject(out);
-            if(o.has("master_lock")) policy=o;
-        } catch(Exception ignored){}
-        clearOutput();
-        McpBridge.run(this,"status");
-        handler.postDelayed(this::readStatus,900);
+        try{JSONObject o=new JSONObject(out); if(o.has("master_lock"))policy=o;}catch(Exception ignored){}
+        clearOutput(); McpBridge.run(this,"status"); handler.postDelayed(this::readStatus,900);
     }
 
     private void readStatus(){
         String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
         String err=getSharedPreferences("bridge",MODE_PRIVATE).getString("stderr","");
         int exit=getSharedPreferences("bridge",MODE_PRIVATE).getInt("exit",-1);
-
-        if(exit!=0 && out.length()==0){
-            status.setText("OFFLINE  •  Termux bridge unavailable");
-            content.removeAllViews();
-            content.addView(title("Connection problem"));
-            content.addView(tv(err.length()>0?err:"No response from Termux.",14));
-        } else {
-            try{
-                JSONObject o=new JSONObject(out);
-                if(o.has("connected")) status.setText(
-                    (o.optBoolean("connected")?"CONNECTED":"DISCONNECTED")+
-                    "  •  MCP="+o.optString("mcp")+
-                    "  •  Proxy="+o.optString("proxy")+
-                    "  •  Tunnel="+o.optString("tunnel"));
-            }catch(Exception ignored){
-                status.setText(policy!=null?"POLICY LOADED  •  status unavailable":"OFFLINE  •  no policy received");
+        boolean ok=false;
+        try{
+            JSONObject o=new JSONObject(out);
+            if(o.has("connected")){
+                ok=o.optBoolean("connected");
+                status.setText("●  "+(ok?"CONNECTED":"DISCONNECTED")+"  •  MCP CONTROL");
+                status.setTextColor(ok?Color.rgb(34,197,94):Color.rgb(239,68,68));
+                updateIndicators(o);
             }
-        }
-        busy=false;
-        render();
+        }catch(Exception ignored){}
+        if(!ok && policy==null && err.length()>0) content.addView(text(err,13,Color.rgb(185,28,28)));
+        busy=false; render();
+    }
+
+    private void updateIndicators(JSONObject o){
+        indicatorRow.removeAllViews();
+        boolean m=o.optBoolean("mcp_ok",o.optBoolean("connected",false));
+        boolean p=o.optBoolean("proxy_ok",false);
+        boolean t=o.optBoolean("tunnel_ok",false);
+        indicatorRow.addView(dot("MCP  "+(m?"OK":"DOWN"),m?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
+        indicatorRow.addView(dot("PROXY  "+(p?"OK":"DOWN"),p?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
+        indicatorRow.addView(dot("TUNNEL  "+(t?"OK":"DOWN"),t?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
     }
 
     private void render(){
         content.removeAllViews();
-        if(policy==null){
-            content.addView(title("Not connected"));
-            content.addView(tv("Tap Connect / Refresh in the header.",16));
-            return;
-        }
-
+        if(policy==null){renderOffline();return;}
         boolean locked=policy.optBoolean("master_lock",true);
         if("overview".equals(group)){
-            content.addView(title(locked?"MASTER LOCK  •  ON":"MASTER LOCK  •  OFF"));
-            content.addView(tv(locked?"All capabilities are effectively DENY.":"Per-capability policy is active.",15));
-            content.addView(btn("Refresh status",v->refresh()));
-            content.addView(btn("Start MCP",v->runAction("start",1500)));
-            content.addView(btn("Restart MCP",v->runAction("restart",1800)));
-            content.addView(btn(locked?"Unlock controls":"Lock everything",v->{ if(locked) unlockAll(); else lockAll(); }));
-            content.addView(tv("Emergency Lock is always available. Unlock is a local app action and is not exposed through MCP.",13));
+            content.addView(title("System Overview"));
+            content.addView(card("MASTER LOCK",locked?"ON  •  EFFECTIVE DENY":"OFF  •  POLICY ACTIVE",locked?Color.rgb(239,68,68):Color.rgb(34,197,94)));
+            content.addView(button("↻  Refresh status",v->refresh()));
+            content.addView(button("▶  Start MCP",v->runAction("start",1600)));
+            content.addView(button("↻  Restart MCP",v->runAction("restart",1900)));
+            content.addView(button(locked?"🔓  Unlock Controls":"🔒  Lock Everything",v->{if(locked)unlockAll();else lockAll();}));
+            content.addView(text("Default policy: DENY. Changes are controlled locally through this app.",13,Color.rgb(71,85,105)));
             return;
         }
-
-        JSONObject caps=policy.optJSONObject("capabilities");
-        JSONArray a=caps==null?null:caps.optJSONArray(group);
-        if(a==null){content.addView(title("No capabilities"));return;}
+        JSONObject caps=policy.optJSONObject("capabilities"); JSONArray a=caps==null?null:caps.optJSONArray(group);
         content.addView(title(labels[indexOf(group)]));
-        if(locked) content.addView(tv("Master Lock is ON. Unlock controls from Overview.",14));
-
+        if(a==null){content.addView(text("No capabilities in this group.",15,Color.rgb(100,116,139)));return;}
+        if(locked)content.addView(card("MASTER LOCK","ON  •  CONTROLS DISABLED",Color.rgb(239,68,68)));
         for(int i=0;i<a.length();i++){
-            JSONObject item=a.optJSONObject(i);
-            if(item==null) continue;
-            String id=item.optString("id");
-            String label=item.optString("label",id);
-            String state=item.optString("state","deny");
-            Button b=btn(label+"    ["+state.toUpperCase()+"]",v->cycle(id,state));
-            b.setEnabled(!locked);
-            content.addView(b);
+            JSONObject x=a.optJSONObject(i); if(x==null)continue;
+            String id=x.optString("id"), label=x.optString("label",id), state=x.optString("state","deny");
+            Button b=button(label+"     ["+state.toUpperCase()+"]",v->cycle(id,state)); b.setEnabled(!locked); content.addView(b);
         }
     }
 
-    private int indexOf(String g){
-        for(int i=0;i<groups.length;i++) if(groups[i].equals(g)) return i;
-        return 0;
-    }
-
-    private void cycle(String id,String state){
-        String next="deny".equals(state)?"ask":("ask".equals(state)?"allow":"deny");
-        runSet(id,next);
-    }
-
-    private void runSet(String id,String next){
-        busy=true;
-        status.setText("SAVING  •  "+id+" → "+next);
-        clearOutput();
-        McpBridge.run(this,"set",id,next);
-        handler.postDelayed(this::refresh,700);
-    }
-
-    private void runAction(String action,int delay){
-        busy=true;
-        status.setText(action.toUpperCase()+"  •  working…");
-        clearOutput();
-        McpBridge.run(this,action);
-        handler.postDelayed(this::refresh,delay);
-    }
-
-    private void lockAll(){
-        busy=true;
-        status.setText("LOCKING  •  all capabilities → DENY");
-        clearOutput();
-        McpBridge.run(this,"lock");
-        handler.postDelayed(this::refresh,700);
-    }
-
-    private void unlockAll(){
-        busy=true;
-        status.setText("UNLOCKING  •  local controller");
-        clearOutput();
-        McpBridge.run(this,"unlock","UNLOCK");
-        handler.postDelayed(this::refresh,700);
-    }
+    private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
+    private void cycle(String id,String state){String n="deny".equals(state)?"ask":("ask".equals(state)?"allow":"deny");runSet(id,n);}
+    private void runSet(String id,String n){busy=true;status.setText("●  SAVING  •  "+id);clearOutput();McpBridge.run(this,"set",id,n);handler.postDelayed(this::refresh,800);}
+    private void runAction(String a,int d){busy=true;status.setText("●  "+a.toUpperCase()+"  •  WORKING");clearOutput();McpBridge.run(this,a);handler.postDelayed(this::refresh,d);}
+    private void lockAll(){busy=true;status.setText("●  LOCKING  •  DENY ALL");clearOutput();McpBridge.run(this,"lock");handler.postDelayed(this::refresh,800);}
+    private void unlockAll(){busy=true;status.setText("●  UNLOCKING  •  LOCAL CONTROL");clearOutput();McpBridge.run(this,"unlock","UNLOCK");handler.postDelayed(this::refresh,800);}
 }
