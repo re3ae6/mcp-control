@@ -38,8 +38,11 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Clean build
+        run: gradle --no-daemon clean
+
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --refresh-dependencies :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
