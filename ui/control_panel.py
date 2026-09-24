@@ -2,8 +2,9 @@
 """Compact tabbed terminal control panel for MCP Control."""
 from __future__ import annotations
 import curses
-from core.policy import load_policy, save_policy, set_master_lock, set_state
+from core.policy import load_policy
 from core.connection import get_connection_status
+from core.trusted_control import set_capability, lock, unlock
 
 TABS = [
     ("Overview", None), ("Files", "files"), ("Git", "git"),
@@ -19,14 +20,13 @@ def main(stdscr):
     policy = load_policy()
     tab = 0
     row = 0
-    dirty = False
 
     while True:
         stdscr.erase()
         h, w = stdscr.getmaxyx()
         stdscr.addstr(0, 0, " MCP CONTROL ", curses.A_BOLD)
-        lock = policy.get("master_lock", True)
-        lock_text = "MASTER LOCK: ON" if lock else "MASTER LOCK: OFF"
+        lock_state = policy.get("master_lock", True)
+        lock_text = "MASTER LOCK: ON" if lock_state else "MASTER LOCK: OFF"
         status = get_connection_status()
         light = "🟢" if status["connected"] else "🔴"
         status_text = f"{light} MCP {status['label']}"
@@ -48,7 +48,8 @@ def main(stdscr):
                 "",
                 "Fine-grained, deny-by-default permission controller.",
                 "",
-                f"Effective access: DENY (master lock)" if lock else "Effective access follows individual permissions.",
+                "Effective access: DENY (master lock)" if lock_state else
+                "Effective access follows individual permissions.",
                 f"DENY={counts['deny']}   ASK={counts['ask']}   ALLOW={counts['allow']}",
                 f"Connection: {status['label']}   MCP={status['mcp']}   Proxy={status['proxy']}   Tunnel={status['tunnel']}",
                 "",
@@ -75,32 +76,43 @@ def main(stdscr):
                 attr = curses.A_REVERSE if selected else curses.A_NORMAL
                 stdscr.addnstr(4 + i, 2, text, max(1, w-4), attr)
             if 4 + len(items) < h:
-                stdscr.addnstr(5 + len(items), 2, "SPACE: cycle   L: master lock   S: save   ←/→: tab   Q: quit", max(1, w-4))
+                stdscr.addnstr(
+                    5 + len(items), 2,
+                    "SPACE: cycle   L: master lock   S: save   ←/→: tab   Q: quit",
+                    max(1, w-4),
+                )
 
         stdscr.refresh()
         key = stdscr.getch()
-        if key in (ord('q'), ord('Q')):
-            if dirty:
-                save_policy(policy)
+
+        if key in (ord("q"), ord("Q")):
             return
-        if key in (curses.KEY_RIGHT, ord('l')):
-            tab = (tab + 1) % len(TABS); row = 0
-        elif key in (curses.KEY_LEFT, ord('h')):
-            tab = (tab - 1) % len(TABS); row = 0
+
+        if key == curses.KEY_RIGHT:
+            tab = (tab + 1) % len(TABS)
+            row = 0
+        elif key in (curses.KEY_LEFT, ord("h")):
+            tab = (tab - 1) % len(TABS)
+            row = 0
         elif key == curses.KEY_DOWN:
             row += 1
         elif key == curses.KEY_UP:
             row = max(0, row - 1)
-        elif key in (ord(' '), 10, 13) and tab != 0:
+        elif key in (ord(" "), 10, 13) and tab != 0:
             item = policy["capabilities"][TABS[tab][1]][row]
             current = item.get("state", "deny")
-            item["state"] = STATES[(STATES.index(current) + 1) % len(STATES)]
-            dirty = True
-        elif key in (ord('l'), ord('L')):
-            set_master_lock(policy, not policy.get("master_lock", True))
-            dirty = True
-        elif key in (ord('s'), ord('S')):
-            save_policy(policy); dirty = False
+            new_state = STATES[(STATES.index(current) + 1) % len(STATES)]
+            set_capability(item["id"], new_state)
+            policy = load_policy()
+        elif key in (ord("l"), ord("L")):
+            if policy.get("master_lock", True):
+                unlock()
+            else:
+                lock()
+            policy = load_policy()
+        elif key in (ord("s"), ord("S")):
+            policy = load_policy()
+
 
 if __name__ == "__main__":
     curses.wrapper(main)
