@@ -5,7 +5,7 @@ import os, re, shlex
 from pathlib import Path
 
 ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control"))
-BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev", "/data/data")
+BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev")
 DANGEROUS = {"rm", "rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
 SHELL_WRAPPERS = {"sh", "bash", "zsh", "fish"}
 INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"}
