@@ -143,9 +143,10 @@ public class MainActivity extends Activity {
 
     private void updateIndicators(JSONObject o){
         indicatorRow.removeAllViews();
-        boolean m=o.optBoolean("mcp_ok",o.optBoolean("connected",false));
-        boolean p=o.optBoolean("proxy_ok",false);
-        boolean t=o.optBoolean("tunnel_ok",false);
+        boolean m="OK".equalsIgnoreCase(o.optString("mcp")) || o.optBoolean("mcp_ok",false);
+        boolean p="OK".equalsIgnoreCase(o.optString("proxy")) || o.optBoolean("proxy_ok",false);
+        String ts=o.optString("tunnel","").toLowerCase();
+        boolean t=ts.contains("live") || ts.contains("ready") || o.optBoolean("tunnel_ok",false);
         indicatorRow.addView(dot("MCP  "+(m?"OK":"DOWN"),m?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
         indicatorRow.addView(dot("PROXY  "+(p?"OK":"DOWN"),p?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
         indicatorRow.addView(dot("TUNNEL  "+(t?"OK":"DOWN"),t?Color.rgb(34,197,94):Color.rgb(239,68,68)),new LinearLayout.LayoutParams(0,dp(38),1));
@@ -178,8 +179,8 @@ public class MainActivity extends Activity {
 
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
     private void cycle(String id,String state){String n="deny".equals(state)?"ask":("ask".equals(state)?"allow":"deny");runSet(id,n);}
-    private void runSet(String id,String n){busy=true;status.setText("●  SAVING  •  "+id);clearOutput();McpBridge.run(this,"set",id,n);handler.postDelayed(this::refresh,800);}
-    private void runAction(String a,int d){busy=true;status.setText("●  "+a.toUpperCase()+"  •  WORKING");clearOutput();McpBridge.run(this,a);handler.postDelayed(this::refresh,d);}
+    private void runSet(String id,String n){busy=true;status.setText("●  SAVING  •  "+id);clearOutput();McpBridge.run(this,"set",id,n);handler.postDelayed(()->{busy=false;refresh();},1100);}
+    private void runAction(String a,int d){busy=true;status.setText("●  "+a.toUpperCase()+"  •  WORKING");clearOutput();McpBridge.run(this,a);handler.postDelayed(()->{busy=false;refresh();},d);}
     private void lockAll(){busy=true;status.setText("●  LOCKING  •  DENY ALL");clearOutput();McpBridge.run(this,"lock");handler.postDelayed(this::refresh,800);}
     private void unlockAll(){busy=true;status.setText("●  UNLOCKING  •  LOCAL CONTROL");clearOutput();McpBridge.run(this,"unlock","UNLOCK");handler.postDelayed(this::refresh,800);}
 }
