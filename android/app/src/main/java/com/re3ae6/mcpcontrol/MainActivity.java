@@ -54,11 +54,11 @@ public class MainActivity extends Activity {
         LinearLayout header=new LinearLayout(this); header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(10),dp(10),dp(10),dp(8)); header.setBackgroundColor(Color.rgb(15,23,42));
 
-        TextView brand=text("MCP  CONTROL",22,Color.WHITE);
+        TextView brand=text("MCP  CONTROL  •  v2",22,Color.WHITE);
         brand.setTypeface(Typeface.DEFAULT,Typeface.BOLD); brand.setPadding(dp(10),dp(4),dp(10),0);
         header.addView(brand);
 
-        status=text("●  READY  •  DISCONNECTED  •  re3a",13,Color.rgb(250,204,21));
+        status=text("●  READY  •  DISCONNECTED  •  re3a  •  BUILD c274",13,Color.rgb(250,204,21));
         status.setTypeface(Typeface.DEFAULT,Typeface.BOLD); status.setPadding(dp(10),0,dp(10),dp(8));
         header.addView(status);
 
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
     }
 
     private void renderOffline(){
-        status.setText("●  READY  •  DISCONNECTED  •  re3a");
+        status.setText("●  READY  •  DISCONNECTED  •  re3a  •  BUILD c274");
         status.setTextColor(Color.rgb(250,204,21));
         content.removeAllViews();
         content.addView(title("System Overview"));
