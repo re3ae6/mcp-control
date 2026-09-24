@@ -13,24 +13,68 @@ from termux_mcp import mcp_core, mcp_server
 
 
 def _capability(name: str) -> str:
-    if name in {"run", "cancel", "session_start", "session_run", "session_poll", "session_list", "session_kill", "terminal_open", "terminal_run", "terminal_send", "terminal_read", "terminal_list", "terminal_close"}:
-        return "terminal.bash"
-    if name in {"ls", "read", "search", "context", "history", "changes_list"}:
-        return "files.repo"
-    if name in {"write", "mkdir", "delete", "backup", "restore", "undo", "history_save", "history_clear", "recipe_save"}:
-        return "files.repo"
-    if name in {"location"}: return "device.location"
-    if name in {"camera_photo", "screenshot", "image_process", "text_extract"}: return "device.camera"
-    if name in {"sms_send", "sms_inbox"}: return "device.sms"
-    if name in {"clipboard_get", "clipboard_set"}: return "device.other"
-    if name in {"notify", "toast"}: return "device.notifications"
-    if name in {"system_info", "health", "battery", "process_list", "cron_list"}: return "terminal.process"
-    if name in {"process_kill", "cron_add", "cron_remove"}: return "dangerous.kill"
-    if name in {"smart_install"}: return "dangerous.install"
-    if name in {"git_pr", "diff"}: return "git.diff"
-    if name in {"open_url", "download", "public_ip", "weather", "speedtest", "qrcode", "cloud_sync"}: return "network.internet"
-    return "dangerous.outside_allowlist"
-
+    exact = {
+        "ls": "files.repo",
+        "read": "files.repo",
+        "search": "files.repo",
+        "context": "files.repo",
+        "history": "files.repo",
+        "changes_list": "files.repo",
+        "write": "files.repo_tools",
+        "mkdir": "files.repo_tools",
+        "delete": "dangerous.delete",
+        "backup": "files.repo_reports",
+        "restore": "files.repo_reports",
+        "undo": "files.repo_tools",
+        "history_save": "files.repo_tools",
+        "history_clear": "files.repo_tools",
+        "recipe_save": "files.repo_tools",
+        "run": "terminal.bash",
+        "cancel": "terminal.bash",
+        "session_start": "terminal.background",
+        "session_run": "terminal.bash",
+        "session_poll": "terminal.bash",
+        "session_list": "terminal.bash",
+        "session_kill": "terminal.kill",
+        "terminal_open": "terminal.bash",
+        "terminal_run": "terminal.bash",
+        "terminal_send": "terminal.bash",
+        "terminal_read": "terminal.bash",
+        "terminal_list": "terminal.bash",
+        "terminal_close": "terminal.bash",
+        "system_info": "terminal.process",
+        "health": "terminal.process",
+        "battery": "device.other",
+        "process_list": "terminal.process",
+        "cron_list": "terminal.process",
+        "process_kill": "dangerous.kill",
+        "cron_add": "terminal.background",
+        "cron_remove": "dangerous.kill",
+        "git_pr": "git.diff",
+        "diff": "git.diff",
+        "open_url": "network.internet",
+        "download": "network.internet",
+        "public_ip": "network.internet",
+        "weather": "network.internet",
+        "speedtest": "network.internet",
+        "qrcode": "network.internet",
+        "cloud_sync": "network.internet",
+        "location": "device.location",
+        "camera_photo": "device.camera",
+        "screenshot": "device.camera",
+        "image_process": "device.camera",
+        "text_extract": "device.camera",
+        "sms_send": "device.sms",
+        "sms_inbox": "device.sms",
+        "clipboard_get": "device.other",
+        "clipboard_set": "device.other",
+        "notify": "device.notifications",
+        "toast": "device.notifications",
+        "tts_speak": "device.other",
+        "share": "device.other",
+        "smart_install": "dangerous.install",
+    }
+    return exact.get(name, "dangerous.outside_allowlist")
 
 _original = mcp_core.call_tool
 
