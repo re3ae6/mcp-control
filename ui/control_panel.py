@@ -3,6 +3,7 @@
 from __future__ import annotations
 import curses
 from core.policy import load_policy, save_policy, set_master_lock, set_state
+from core.connection import get_connection_status
 
 TABS = [
     ("Overview", None), ("Files", "files"), ("Git", "git"),
@@ -26,6 +27,10 @@ def main(stdscr):
         stdscr.addstr(0, 0, " MCP CONTROL ", curses.A_BOLD)
         lock = policy.get("master_lock", True)
         lock_text = "MASTER LOCK: ON" if lock else "MASTER LOCK: OFF"
+        status = get_connection_status()
+        light = "🟢" if status["connected"] else "🔴"
+        status_text = f"{light} MCP {status['label']}"
+        stdscr.addstr(0, max(0, w-len(status_text)-len(lock_text)-3), status_text, curses.A_BOLD)
         stdscr.addstr(0, max(0, w-len(lock_text)-1), lock_text, curses.A_BOLD)
 
         x = 0
@@ -45,6 +50,7 @@ def main(stdscr):
                 "",
                 f"Effective access: DENY (master lock)" if lock else "Effective access follows individual permissions.",
                 f"DENY={counts['deny']}   ASK={counts['ask']}   ALLOW={counts['allow']}",
+                f"Connection: {status['label']}   MCP={status['mcp']}   Proxy={status['proxy']}   Tunnel={status['tunnel']}",
                 "",
                 "Controls:",
                 "  ←/→  change tab    ↑/↓  select    SPACE  cycle DENY→ASK→ALLOW",
