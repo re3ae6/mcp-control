@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <queries><package android:name="com.termux" /></queries>
-    <application android:theme="@style/AppTheme" android:label="MCP Control" android:allowBackup="false" android:supportsRtl="true">
+    <application android:theme="@style/AppTheme" android:label="MCP Control" android:icon="@drawable/ic_mcp_control" android:roundIcon="@drawable/ic_mcp_control" android:allowBackup="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
