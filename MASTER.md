@@ -72,7 +72,7 @@ Unknown/outside paths are denied.
 - set_capability
 - lock
 
-`unlock` is intentionally absent.
+`unlock` is local-UI-only recovery, is not exposed through `dispatch`/MCP, and requires the exact interactive confirmation `UNLOCK` from a TTY.
 
 Important:
 trusted_control is a control-plane module, not yet a complete OS-level trust boundary. Same-user local processes may still invoke Python modules directly. A future hardened admin/UI boundary must address this.
