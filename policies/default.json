@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "master_lock": true,
+  "capabilities": {
+    "files": [
+      {"id":"files.repo","label":"~/po_recorder/**","state":"deny"},
+      {"id":"files.repo_data","label":"~/po_recorder/data/**","state":"deny"},
+      {"id":"files.repo_tools","label":"~/po_recorder/tools/**","state":"deny"},
+      {"id":"files.repo_reports","label":"~/po_recorder/reports/**","state":"deny"},
+      {"id":"files.repo_tmp","label":"~/po_recorder/tmp/**","state":"deny"},
+      {"id":"files.tunnel_install","label":"~/tunnel-client-install/**","state":"deny"},
+      {"id":"files.home","label":"$HOME/**","state":"deny"},
+      {"id":"files.shared_storage","label":"/sdcard/**","state":"deny"},
+      {"id":"files.custom","label":"Custom paths","state":"deny"}
+    ],
+    "git": [
+      {"id":"git.pull","label":"git pull","state":"deny"},
+      {"id":"git.status","label":"git status","state":"deny"},
+      {"id":"git.diff","label":"git diff","state":"deny"},
+      {"id":"git.add","label":"git add","state":"deny"},
+      {"id":"git.commit","label":"git commit","state":"deny"},
+      {"id":"git.push","label":"git push","state":"deny"},
+      {"id":"git.branch","label":"branch changes","state":"deny"},
+      {"id":"git.delete","label":"delete tracked files","state":"deny"}
+    ],
+    "terminal": [
+      {"id":"terminal.bash","label":"Bash commands","state":"deny"},
+      {"id":"terminal.python","label":"Python execution","state":"deny"},
+      {"id":"terminal.process","label":"Start processes","state":"deny"},
+      {"id":"terminal.background","label":"Background processes","state":"deny"},
+      {"id":"terminal.kill","label":"Kill processes","state":"deny"},
+      {"id":"terminal.install","label":"Install packages","state":"deny"},
+      {"id":"terminal.chmod","label":"Change permissions","state":"deny"},
+      {"id":"terminal.env","label":"Change environment","state":"deny"}
+    ],
+    "network": [
+      {"id":"network.local_8081","label":"127.0.0.1:8081","state":"deny"},
+      {"id":"network.local_18080","label":"127.0.0.1:18080","state":"deny"},
+      {"id":"network.local_18081","label":"127.0.0.1:18081","state":"deny"},
+      {"id":"network.tunnel","label":"OpenAI MCP tunnel","state":"deny"},
+      {"id":"network.openai","label":"api.openai.com","state":"deny"},
+      {"id":"network.internet","label":"General internet","state":"deny"},
+      {"id":"network.other","label":"Other destinations","state":"deny"}
+    ],
+    "mcp": [
+      {"id":"mcp.execute","label":"Execute MCP command","state":"deny"},
+      {"id":"mcp.read_output","label":"Read command output","state":"deny"},
+      {"id":"mcp.create","label":"Create files","state":"deny"},
+      {"id":"mcp.modify","label":"Modify files","state":"deny"},
+      {"id":"mcp.delete","label":"Delete files","state":"deny"},
+      {"id":"mcp.long_running","label":"Long-running jobs","state":"deny"},
+      {"id":"mcp.process","label":"Process management","state":"deny"}
+    ],
+    "device": [
+      {"id":"device.shared_storage","label":"Android shared storage","state":"deny"},
+      {"id":"device.location","label":"Location","state":"deny"},
+      {"id":"device.camera","label":"Camera","state":"deny"},
+      {"id":"device.microphone","label":"Microphone","state":"deny"},
+      {"id":"device.contacts","label":"Contacts","state":"deny"},
+      {"id":"device.sms","label":"SMS","state":"deny"},
+      {"id":"device.notifications","label":"Notifications","state":"deny"},
+      {"id":"device.other","label":"Other Android APIs","state":"deny"}
+    ],
+    "dangerous": [
+      {"id":"dangerous.delete","label":"Delete files/directories","state":"deny"},
+      {"id":"dangerous.kill","label":"Kill process","state":"deny"},
+      {"id":"dangerous.install","label":"Install software","state":"deny"},
+      {"id":"dangerous.chmod","label":"Change permissions","state":"deny"},
+      {"id":"dangerous.outside_allowlist","label":"Command outside allowlist","state":"deny"}
+    ]
+  }
+}
