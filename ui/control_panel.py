@@ -106,7 +106,19 @@ def main(stdscr):
             policy = load_policy()
         elif key in (ord("l"), ord("L")):
             if policy.get("master_lock", True):
-                unlock()
+                stdscr.addstr(h - 2, 2, "Type UNLOCK then Enter to confirm local recovery: ")
+                stdscr.clrtoeol()
+                curses.echo()
+                try:
+                    confirmation = stdscr.getstr().decode("utf-8", "replace")
+                finally:
+                    curses.noecho()
+                try:
+                    unlock(confirmation)
+                except PermissionError:
+                    stdscr.addstr(h - 1, 2, "Unlock denied: confirmation required.")
+                    stdscr.refresh()
+                    stdscr.getch()
             else:
                 lock()
             policy = load_policy()
