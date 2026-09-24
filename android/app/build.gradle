@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.re3ae6.mcpcontrol'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.re3ae6.mcpcontrol'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+}
