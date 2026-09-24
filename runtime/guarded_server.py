@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.enforcer import check, record
+from core.enforcer import check, record, request_approval, consume_approval
 from core.command_guard import authorize_command
 from termux_mcp import mcp_core, mcp_server
 
@@ -45,11 +45,79 @@ def guarded_call(session, name, params, on_progress=None):
             return {"content": [{"type": "text", "text": f"MCP CONTROL: command denied: {reason}"}], "isError": True}
     d = check(cap)
     if not d.allowed:
-        result = "ASK" if d.requires_approval else "DENY"
-        record(cap, f"mcp.tools/call:{name}", result)
         if d.requires_approval:
-            return {"content": [{"type": "text", "text": f"MCP CONTROL: approval required for {cap} (tool={name})"}], "isError": True}
-        return {"content": [{"type": "text", "text": f"MCP CONTROL: access denied ({cap}); master lock/policy is active"}], "isError": True}
+            approval_id = params.get("approval_id") if isinstance(params, dict) else None
+
+            if approval_id:
+                clean_params = dict(params)
+                clean_params.pop("approval_id", None)
+                try:
+                    consume_approval(
+                        approval_id,
+                        cap,
+                        name,
+                        clean_params,
+                    )
+                except PermissionError as e:
+                    record(
+                        cap,
+                        f"mcp.tools/call:{name}",
+                        f"ASK_DENY:{e}",
+                    )
+                    return {
+                        "content": [{
+                            "type": "text",
+                            "text": f"MCP CONTROL: approval denied: {e}",
+                        }],
+                        "isError": True,
+                    }
+
+                record(
+                    cap,
+                    f"mcp.tools/call:{name}",
+                    "APPROVED_ALLOW",
+                )
+                return _original(
+                    session,
+                    name,
+                    clean_params,
+                    on_progress=on_progress,
+                )
+
+            approval = request_approval(cap, name, params)
+            record(
+                cap,
+                f"mcp.tools/call:{name}",
+                "ASK",
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": (
+                        f"MCP CONTROL: approval required for {cap}; "
+                        f"approval_id={approval['approval_id']}; "
+                        f"expires_at={approval['expires_at']}"
+                    ),
+                }],
+                "isError": True,
+            }
+
+        record(
+            cap,
+            f"mcp.tools/call:{name}",
+            "DENY",
+        )
+        return {
+            "content": [{
+                "type": "text",
+                "text": (
+                    f"MCP CONTROL: access denied ({cap}); "
+                    "master lock/policy is active"
+                ),
+            }],
+            "isError": True,
+        }
+
     record(cap, f"mcp.tools/call:{name}", "ALLOW")
     return _original(session, name, params, on_progress=on_progress)
 

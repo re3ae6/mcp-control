@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+from .approval import create as create_approval, consume as _consume_approval
 from .policy import load_policy, decision
 
 AUDIT_DIR = Path.home() / ".config" / "mcp-control"
@@ -17,6 +18,26 @@ class Decision:
     allowed: bool
     requires_approval: bool
 
+
+
+def request_approval(capability: str, tool: str, params) -> dict:
+    """Create a short-lived approval bound to the exact request."""
+    return create_approval(capability, tool, params)
+
+
+def consume_approval(
+    approval_id: str,
+    capability: str,
+    tool: str,
+    params,
+) -> dict:
+    """Consume one exact approval; mismatches and replay are denied."""
+    return _consume_approval(
+        approval_id,
+        capability,
+        tool,
+        params,
+    )
 
 def check(capability: str) -> Decision:
     policy = load_policy()
