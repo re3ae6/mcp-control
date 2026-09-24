@@ -25,6 +25,6 @@ public final class McpBridge {
         if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
                 PendingIntent.getService(context, code, result, flags));
-        context.startService(i);
+        try {\n            context.startService(i);\n        } catch (RuntimeException ignored) {\n            // Termux may be unavailable or RUN_COMMAND may not be granted.\n            // The control app must remain open in offline mode.\n        }
     }
 }
