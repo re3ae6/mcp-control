@@ -15,6 +15,7 @@ ALLOWED_ACTIONS = {
     "read_policy",
     "set_capability",
     "lock",
+    "unlock",
 }
 
 
@@ -51,6 +52,18 @@ def lock() -> None:
     _audit("lock", "ALLOW")
 
 
+def unlock() -> None:
+    """Explicitly unlock through the local trusted-control/UI path only.
+
+    This primitive is intentionally not exposed as an MCP tool. Ordinary
+    MCP requests remain subject to the master lock.
+    """
+    policy = load_policy()
+    set_master_lock(policy, False)
+    save_policy(policy)
+    _audit("unlock", "ALLOW", "local_trusted_control_only")
+
+
 def dispatch(action: str, **kwargs: Any) -> Any:
     if action not in ALLOWED_ACTIONS:
         _audit(action, "DENY", "action_not_allowed")
@@ -66,6 +79,10 @@ def dispatch(action: str, **kwargs: Any) -> Any:
     if action == "lock":
         lock()
         return {"ok": True, "master_lock": True}
+
+    if action == "unlock":
+        unlock()
+        return {"ok": True, "master_lock": False}
 
     raise AssertionError(action)
 
