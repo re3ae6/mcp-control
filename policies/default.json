@@ -9,6 +9,11 @@
         "state": "deny"
       },
       {
+        "id": "files.control",
+        "label": "~/mcp-control/**",
+        "state": "deny"
+      },
+      {
         "id": "files.repo_data",
         "label": "~/po_recorder/data/**",
         "state": "deny"

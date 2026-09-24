@@ -69,69 +69,94 @@ def _capability(name: str) -> str:
     }
     return exact.get(name, "dangerous.outside_allowlist")
 
-_original = mcp_core.call_tool
 
+_FILE_TOOLS = {
+    "ls": "files.list",
+    "read": "files.read",
+    "search": "files.search",
+    "context": "files.context",
+    "history": "files.history",
+    "changes_list": "files.changes",
+    "write": "files.write",
+    "mkdir": "files.mkdir",
+}
+
+def _request_path(params):
+    raw = params.get("path", ".") if isinstance(params, dict) else "."
+    if not isinstance(raw, str) or not raw.strip():
+        raw = "."
+    return Path(raw).expanduser().resolve()
+
+def _file_scope(params):
+    path = _request_path(params)
+    home = Path.home()
+    scoped = ((home / "po_recorder" / "data", "files.repo_data"), (home / "po_recorder" / "tools", "files.repo_tools"), (home / "po_recorder" / "reports", "files.repo_reports"), (home / "po_recorder" / "tmp", "files.repo_tmp"), (home / "tunnel-client-install", "files.tunnel_install"), (Path("/sdcard"), "files.shared_storage"))
+    for root, capability in scoped:
+        root = root.resolve()
+        if path == root or root in path.parents:
+            return capability
+    roots = ((home / "po_recorder", "files.repo"), (home / "mcp-control", "files.control"), (home, "files.home"))
+    for root, capability in roots:
+        root = root.resolve()
+        if path == root or root in path.parents:
+            return capability
+    return "dangerous.outside_allowlist"
 
 def guarded_call(session, name, params, on_progress=None):
     cap = _capability(name)
-    if name == "run" and isinstance(params, dict):
+    decisions = [cap]
+    # decisions already built above
+    if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
+        command = params.get("cmd", params.get("command", "")).strip()
+        if command.startswith("git pull"): decisions.append("git.pull")
+        elif command.startswith("git status"): decisions.append("git.status")
+        elif command.startswith("git diff"): decisions.append("git.diff")
+        elif command.startswith("git add"): decisions.append("git.add")
+        elif command.startswith("git commit"): decisions.append("git.commit")
+        elif command.startswith("git push"): decisions.append("git.push")
+        elif command.startswith("git switch") or command.startswith("git checkout") or command.startswith("git branch"): decisions.append("git.branch")
+    extra = {"run":"mcp.execute", "terminal_run":"mcp.execute", "terminal_send":"mcp.execute", "session_run":"mcp.execute", "session_start":"mcp.long_running", "session_poll":"mcp.read_output", "terminal_read":"mcp.read_output", "session_list":"mcp.process", "terminal_list":"mcp.process", "session_kill":"mcp.process", "terminal_close":"mcp.long_running", "write":"mcp.modify", "mkdir":"mcp.create", "delete":"mcp.delete"}.get(name)
+    if extra and extra not in decisions: decisions.append(extra)
+    if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", ""))
         ok, reason = authorize_command(command)
         if not ok:
             record("dangerous.outside_allowlist", f"mcp.tools/call:{name}", "DENY_COMMAND")
             return {"content": [{"type": "text", "text": f"MCP CONTROL: command denied: {reason}"}], "isError": True}
-    d = check(cap)
-    if not d.allowed:
+
+    # decisions already built above
+    for required_cap in _file_decisions(name, params):
+        if required_cap not in decisions:
+            decisions.append(required_cap)
+
+    for required_cap in decisions:
+        d = check(required_cap)
+        if d.allowed:
+            continue
+
         if d.requires_approval:
             approval_id = params.get("approval_id") if isinstance(params, dict) else None
-
             if approval_id:
                 clean_params = dict(params)
                 clean_params.pop("approval_id", None)
                 try:
-                    consume_approval(
-                        approval_id,
-                        cap,
-                        name,
-                        clean_params,
-                    )
+                    consume_approval(approval_id, required_cap, name, clean_params)
                 except PermissionError as e:
-                    record(
-                        cap,
-                        f"mcp.tools/call:{name}",
-                        f"ASK_DENY:{e}",
-                    )
+                    record(required_cap, f"mcp.tools/call:{name}", f"ASK_DENY:{e}")
                     return {
-                        "content": [{
-                            "type": "text",
-                            "text": f"MCP CONTROL: approval denied: {e}",
-                        }],
+                        "content": [{"type": "text", "text": f"MCP CONTROL: approval denied: {e}"}],
                         "isError": True,
                     }
+                record(required_cap, f"mcp.tools/call:{name}", "APPROVED_ALLOW")
+                continue
 
-                record(
-                    cap,
-                    f"mcp.tools/call:{name}",
-                    "APPROVED_ALLOW",
-                )
-                return _original(
-                    session,
-                    name,
-                    clean_params,
-                    on_progress=on_progress,
-                )
-
-            approval = request_approval(cap, name, params)
-            record(
-                cap,
-                f"mcp.tools/call:{name}",
-                "ASK",
-            )
+            approval = request_approval(required_cap, name, params)
+            record(required_cap, f"mcp.tools/call:{name}", "ASK")
             return {
                 "content": [{
                     "type": "text",
                     "text": (
-                        f"MCP CONTROL: approval required for {cap}; "
+                        f"MCP CONTROL: approval required for {required_cap}; "
                         f"approval_id={approval['approval_id']}; "
                         f"expires_at={approval['expires_at']}"
                     ),
@@ -139,23 +164,17 @@ def guarded_call(session, name, params, on_progress=None):
                 "isError": True,
             }
 
-        record(
-            cap,
-            f"mcp.tools/call:{name}",
-            "DENY",
-        )
+        record(required_cap, f"mcp.tools/call:{name}", "DENY")
         return {
             "content": [{
                 "type": "text",
-                "text": (
-                    f"MCP CONTROL: access denied ({cap}); "
-                    "master lock/policy is active"
-                ),
+                "text": f"MCP CONTROL: access denied ({required_cap}); policy is active",
             }],
             "isError": True,
         }
 
-    record(cap, f"mcp.tools/call:{name}", "ALLOW")
+    for required_cap in decisions:
+        record(required_cap, f"mcp.tools/call:{name}", "ALLOW")
     return _original(session, name, params, on_progress=on_progress)
 
 

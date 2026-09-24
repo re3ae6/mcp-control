@@ -153,3 +153,12 @@ The control plane is complete only when:
 - trusted administration is isolated from normal MCP execution;
 - automated security regression tests pass;
 - Git history contains only intentional, reviewed changes.
+
+## 15. v2 Build Progress
+- Control UI implemented as eight-area granular permission console.
+- Gateway now supports multi-capability decisions per MCP tool.
+- File operations require both operation capability and path-scope capability.
+- Terminal command Git operations are checked against dedicated git capabilities.
+- Unknown tools remain fail-closed to dangerous.outside_allowlist.
+- Launcher: tools/mcp_control.sh
+- MASTER LOCK remains the global effective DENY override.
