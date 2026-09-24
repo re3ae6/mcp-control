@@ -41,7 +41,16 @@ public class MainActivity extends Activity {
         root.addView(sv,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
     }
 
-    private void renderOffline(){\n        status.setText("MCP CONTROL  •  READY");\n        content.removeAllViews();\n        content.addView(tv("MCP Control",24));\n        content.addView(tv("Termux bridge is not contacted automatically.",16));\n        content.addView(btn("Connect / Refresh",v->refresh()));\n        content.addView(tv("Default DENY • Master Lock protected",14));\n    }\n\n    private void refresh(){
+    private void renderOffline(){
+        status.setText("MCP CONTROL  •  READY");
+        content.removeAllViews();
+        content.addView(tv("MCP Control",24));
+        content.addView(tv("Termux bridge is not contacted automatically.",16));
+        content.addView(btn("Connect / Refresh",v->refresh()));
+        content.addView(tv("Default DENY • Master Lock protected",14));
+    }
+
+    private void refresh(){
         McpBridge.run(this,"policy");
         handler.postDelayed(this::readPolicyThenStatus,700);
     }
