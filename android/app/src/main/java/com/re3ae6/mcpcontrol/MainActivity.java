@@ -21,7 +21,7 @@ public class MainActivity extends Activity {
     private final String[] groups={"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels={"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
 
-    @Override public void onCreate(Bundle b){ super.onCreate(b); buildUi(); refresh(); }
+    @Override public void onCreate(Bundle b){ super.onCreate(b); buildUi(); renderOffline(); }
 
     private TextView tv(String s,int size){
         TextView t=new TextView(this); t.setText(s); t.setTextSize(size); t.setPadding(18,12,18,12); return t;
@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
         root.addView(sv,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
     }
 
-    private void refresh(){
+    private void renderOffline(){\n        status.setText("MCP CONTROL  •  READY");\n        content.removeAllViews();\n        content.addView(tv("MCP Control",24));\n        content.addView(tv("Termux bridge is not contacted automatically.",16));\n        content.addView(btn("Connect / Refresh",v->refresh()));\n        content.addView(tv("Default DENY • Master Lock protected",14));\n    }\n\n    private void refresh(){
         McpBridge.run(this,"policy");
         handler.postDelayed(this::readPolicyThenStatus,700);
     }
@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
 
     private void render(){
         content.removeAllViews();
-        if(policy==null){content.addView(tv("Waiting for Termux bridge…",16));return;}
+        if(policy==null){content.addView(tv("No policy received yet. Tap Connect / Refresh.",16)); return;}
         boolean locked=policy.optBoolean("master_lock",true);
         if("overview".equals(group)){
             content.addView(tv(locked?"MASTER LOCK: ON  •  effective DENY":"MASTER LOCK: OFF",20));
