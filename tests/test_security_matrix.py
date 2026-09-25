@@ -206,14 +206,26 @@ class SecurityMatrixTests(unittest.TestCase):
         module = self._guarded_module()
         ask = types.SimpleNamespace(allowed=False, requires_approval=True)
         params = {"cmd": "echo ok"}
-        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval") as consume, patch.object(module, "record"):
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval_bundle") as consume, patch.object(module, "record"):
             consume.return_value = {"approval_id": "a1"}
             result = module.guarded_call(None, "run", {**params, "approval_id": "a1"})
         self.assertEqual(result, {"ok": True})
-        self.assertEqual(consume.call_count, 2)
-        consume.assert_any_call("a1", "terminal.run", "run", params)
-        consume.assert_any_call("a1", "mcp.execute", "run", params)
+        consume.assert_called_once_with("a1", ["mcp.execute", "terminal.run"], "run", params)
         self.assertEqual(module._original.call_count, 1)
+
+    def test_approval_bundle_is_atomic_and_one_shot(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["capabilities"]["terminal"].append({"id": "terminal.run", "state": "ask"})
+        p["capabilities"]["mcp"].append({"id": "mcp.execute", "state": "ask"})
+        policy.save_policy(p)
+
+        params = {"cmd": "echo ok"}
+        item = approval.create_bundle(["terminal.run", "mcp.execute"], "run", params)
+        approval.approve(item["approval_id"])
+        approval.consume_bundle(item["approval_id"], ["terminal.run", "mcp.execute"], "run", params)
+        with self.assertRaisesRegex(PermissionError, "approval_already_consumed"):
+            approval.consume_bundle(item["approval_id"], ["terminal.run", "mcp.execute"], "run", params)
 
     def test_guarded_server_tampered_approval_never_executes(self):
         module = self._guarded_module()
