@@ -30,6 +30,8 @@ public class MainActivity extends Activity {
     private JSONObject policy;
     private String group = "overview";
     private boolean busy = false;
+    private boolean connectionOk = false;
+    private JSONObject lastConnectionStatus;
 
     private static final int BG = 0xfff7f6f2;
     private static final int CARD = 0xffffffff;
@@ -295,8 +297,9 @@ public class MainActivity extends Activity {
     }
 
     private void renderOffline() {
-        status.setText("●  Offline");
-        status.setTextColor(RED);
+        status.setText("●  " + (connectionOk ? "Connected" : "Offline"));
+        status.setTextColor(connectionOk ? GREEN : RED);
+        if (connectionOk && lastConnectionStatus != null) updateIndicators(lastConnectionStatus);
         content.removeAllViews();
 
         addCard("System Overview", "Secure local controller");
@@ -581,6 +584,8 @@ public class MainActivity extends Activity {
             JSONObject o = new JSONObject(out);
             if (o.has("connected")) {
                 boolean ok = o.optBoolean("connected");
+                connectionOk = ok;
+                lastConnectionStatus = o;
                 status.setText("●  " + (ok ? "Connected" : "Disconnected"));
                 status.setTextColor(ok ? GREEN : RED);
                 updateIndicators(o);
@@ -590,6 +595,8 @@ public class MainActivity extends Activity {
         if (err != null && !err.isEmpty()) status.setText("●  Bridge Error");
         else if (exit != 0) status.setText("●  Disconnected");
         status.setTextColor(RED);
+        connectionOk = false;
+        lastConnectionStatus = null;
         return false;
     }
 
@@ -597,13 +604,13 @@ public class MainActivity extends Activity {
         clearOutput();
         clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
-            bridgeFailure("Connected, but the policy query could not be started.");
+            operationFailure("Connected, but the policy query could not be started.");
             return;
         }
         handler.postDelayed(() -> {
             String policyError = commandError("policy");
             if (!policyError.isEmpty()) {
-                bridgeFailure(policyError);
+                operationFailure(policyError);
                 return;
             }
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
@@ -616,8 +623,16 @@ public class MainActivity extends Activity {
         }, 650L);
     }
 
+    private void operationFailure(String message) {
+        busy = false;
+        render();
+        addLogBox(message);
+    }
+
     private void bridgeFailure(String message) {
         busy = false;
+        connectionOk = false;
+        lastConnectionStatus = null;
         status.setText("●  Disconnected");
         status.setTextColor(RED);
         render();
@@ -645,13 +660,13 @@ public class MainActivity extends Activity {
         clearOutput();
         clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
-            bridgeFailure("Policy query could not be started.");
+            operationFailure("Policy query could not be started.");
             return;
         }
         handler.postDelayed(() -> {
             String policyError = commandError("policy");
             if (!policyError.isEmpty()) {
-                bridgeFailure(policyError);
+                operationFailure(policyError);
                 return;
             }
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
