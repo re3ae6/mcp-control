@@ -504,8 +504,6 @@ public class MainActivity extends Activity {
         long delay = attempt == 0 ? 1200L : 2000L;
         handler.postDelayed(new Runnable() {
             @Override public void run() {
-                clearOutput();
-                clearCommandResult("status");
                 if (!McpBridge.run(MainActivity.this, "status")) {
                     bridgeFailure("Could not query Termux. Check Termux permission: Run commands in Termux.");
                     return;
