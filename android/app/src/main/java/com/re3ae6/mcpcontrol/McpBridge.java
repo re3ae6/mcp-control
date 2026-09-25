@@ -23,9 +23,17 @@ public final class McpBridge {
         result.putExtra("mcp_control_command", args.length == 0 ? "" : args[0]);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
         int flags = PendingIntent.FLAG_ONE_SHOT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_MUTABLE;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
                 PendingIntent.getService(context, code, result, flags));
+        String command = args.length == 0 ? "" : args[0];
+        long sentAt = System.currentTimeMillis();
+        context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
+                .putString("sent_command", command)
+                .putInt("sent_execution_id", code)
+                .putLong("sent_at_" + command, sentAt)
+                .putString("callback_state_" + command, "pending")
+                .apply();
         try {
             context.startService(i);
             context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
