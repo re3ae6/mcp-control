@@ -16,15 +16,21 @@ public class PluginResultsService extends IntentService {
 
     @Override protected void onHandleIntent(Intent intent) {
         long now = System.currentTimeMillis();
-        android.content.SharedPreferences.Editor diagnostic = getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putLong("callback_received_at", now);
+        android.content.SharedPreferences.Editor diagnostic =
+                getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putLong("callback_received_at", now)
+                .putString("callback_transport", "service");
+
         if (intent == null) {
             diagnostic.putString("callback_state", "intent_missing").apply();
             return;
         }
+
         Bundle b = intent.getBundleExtra(BUNDLE);
         if (b == null) {
-            diagnostic.putString("callback_state", "bundle_missing").apply();
+            diagnostic.putString("callback_state", "bundle_missing")
+                    .putString("callback_stage", "finished")
+                    .apply();
             return;
         }
 
@@ -35,14 +41,18 @@ public class PluginResultsService extends IntentService {
         String errorMessage = b.getString(ERRMSG, "");
         String command = intent.getStringExtra("mcp_control_command");
 
-        android.content.SharedPreferences.Editor e = getSharedPreferences("bridge", MODE_PRIVATE).edit()
+        android.content.SharedPreferences.Editor e =
+                getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .putString("stdout", stdout)
                 .putString("stderr", stderr)
                 .putInt("exit", exit)
                 .putInt("error_code", errorCode)
                 .putString("error_message", errorMessage)
                 .putString("last_command", command == null ? "" : command)
-                .putLong("received_at", now);
+                .putLong("received_at", now)
+                .putString("callback_state", "received")
+                .putString("callback_stage", "finished")
+                .putString("callback_transport", "service");
 
         if (command != null && !command.isEmpty()) {
             e.putString("callback_state_" + command, "received")
@@ -52,6 +62,7 @@ public class PluginResultsService extends IntentService {
              .putInt("exit_" + command, exit)
              .putInt("error_code_" + command, errorCode)
              .putString("error_message_" + command, errorMessage)
+             .putString("callback_stage_" + command, "finished")
              .putLong("received_at_" + command, now);
         }
         e.apply();
