@@ -92,7 +92,7 @@ public class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(20), dp(18), dp(20), dp(14));
+        header.setPadding(dp(20), dp(26), dp(20), dp(14));
         header.setBackgroundColor(BG);
 
         LinearLayout brand = new LinearLayout(this);
