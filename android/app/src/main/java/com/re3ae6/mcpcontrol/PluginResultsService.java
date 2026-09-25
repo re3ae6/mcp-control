@@ -16,11 +16,26 @@ public class PluginResultsService extends IntentService {
         if (intent == null) return;
         Bundle b = intent.getBundleExtra(BUNDLE);
         if (b == null) return;
-        getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putString("stdout", b.getString(STDOUT, ""))
-                .putString("stderr", b.getString(STDERR, ""))
-                .putInt("exit", b.getInt(EXIT, -1))
-                .putLong("received_at", System.currentTimeMillis())
-                .apply();
+
+        String stdout = b.getString(STDOUT, "");
+        String stderr = b.getString(STDERR, "");
+        int exit = b.getInt(EXIT, -1);
+        long now = System.currentTimeMillis();
+        String command = intent.getStringExtra("mcp_control_command");
+
+        android.content.SharedPreferences.Editor e = getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putString("stdout", stdout)
+                .putString("stderr", stderr)
+                .putInt("exit", exit)
+                .putString("last_command", command == null ? "" : command)
+                .putLong("received_at", now);
+
+        if (command != null && !command.isEmpty()) {
+            e.putString("stdout_" + command, stdout)
+             .putString("stderr_" + command, stderr)
+             .putInt("exit_" + command, exit)
+             .putLong("received_at_" + command, now);
+        }
+        e.apply();
     }
 }
