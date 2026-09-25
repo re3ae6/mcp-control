@@ -9,6 +9,7 @@ from core import approval, policy, trusted_control
 from core.capability_map import (
     TOOL_CAPABILITIES,
     TOOL_SECONDARY_CAPABILITIES,
+    AREA_TOOL_ACTIONS,
     capability_for_tool,
     git_capability_for_command,
 )
@@ -141,6 +142,35 @@ class SecurityMatrixTests(unittest.TestCase):
             for tool in tools:
                 cap = capability_for_tool(tool)
                 self.assertIn(cap, ids, f"{area}:{tool}->{cap}")
+
+    def test_area_catalog_covers_every_mapped_tool(self):
+        catalog_tools = {tool for tools in AREA_TOOL_ACTIONS.values() for tool in tools}
+        self.assertEqual(catalog_tools, set(TOOL_CAPABILITIES))
+
+    def test_policy_capabilities_are_operational_or_explicitly_reserved(self):
+        canonical = Path(__file__).resolve().parents[1] / "policies" / "default.json"
+        policy_data = json.loads(canonical.read_text(encoding="utf-8"))
+        ids = {item["id"] for group in policy_data["capabilities"].values() for item in group}
+        operational = set(TOOL_CAPABILITIES.values())
+        operational.update(cap for caps in TOOL_SECONDARY_CAPABILITIES.values() for cap in caps)
+        operational.update({
+            "git.pull", "git.status", "git.diff", "git.add", "git.commit",
+            "git.push", "git.branch",
+            "files.repo", "files.control", "files.repo_data", "files.repo_tools",
+            "files.repo_reports", "files.repo_tmp", "files.tunnel_install",
+            "files.home", "files.shared_storage", "files.custom",
+        })
+        reserved = {
+            "git.delete",
+            "terminal.bash", "terminal.python", "terminal.kill", "terminal.install",
+            "terminal.chmod", "terminal.env",
+            "network.local_8081", "network.local_18080", "network.local_18081",
+            "network.tunnel", "network.openai", "network.other",
+            "device.shared_storage", "device.microphone", "device.contacts", "device.other",
+            "dangerous.chmod",
+        }
+        self.assertEqual(operational | reserved, ids)
+        self.assertTrue(operational.isdisjoint(reserved))
 
     def test_explicit_tool_mapping_is_covered_by_policy(self):
         canonical = Path(__file__).resolve().parents[1] / "policies" / "default.json"
