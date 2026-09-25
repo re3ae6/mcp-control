@@ -462,9 +462,13 @@ public class MainActivity extends Activity {
                     loadPolicyAndFinish();
                     return;
                 }
-                if (attempt >= 34) {
-                    String err = getSharedPreferences("bridge", MODE_PRIVATE)
-                            .getString("stderr_connect", "");
+                android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+                int connectExit = bridge.getInt("exit_connect", -1);
+                long connectAt = bridge.getLong("received_at_connect", 0L);
+                boolean connectFailed = connectExit > 0 && connectAt > 0 &&
+                        System.currentTimeMillis() - connectAt < 5000L;
+                if (connectFailed || attempt >= 34) {
+                    String err = bridge.getString("stderr_connect", "");
                     busy = false;
                     render();
                     if (err != null && !err.isEmpty()) {
@@ -480,9 +484,9 @@ public class MainActivity extends Activity {
     }
 
     private boolean applyStatusResult() {
-        String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
-        String err = getSharedPreferences("bridge", MODE_PRIVATE).getString("stderr", "");
-        int exit = getSharedPreferences("bridge", MODE_PRIVATE).getInt("exit", -1);
+        String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_status", "");
+        String err = getSharedPreferences("bridge", MODE_PRIVATE).getString("stderr_status", "");
+        int exit = getSharedPreferences("bridge", MODE_PRIVATE).getInt("exit_status", -1);
         try {
             JSONObject o = new JSONObject(out);
             if (o.has("connected")) {
@@ -506,7 +510,7 @@ public class MainActivity extends Activity {
             return;
         }
         handler.postDelayed(() -> {
-            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
             try {
                 JSONObject o = new JSONObject(out);
                 if (o.has("master_lock")) policy = o;
