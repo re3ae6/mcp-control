@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler();
     private LinearLayout content, indicatorRow, tabBar;
     private ScrollView scrollView;
-    private TextView status, lockBanner;
+    private TextView status, statusAge;\n    private Button masterLockButton;
     private LinearLayout logHost;
     private JSONObject policy;
     private JSONArray pendingApprovals = new JSONArray();
@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
     private final String[] groups = {"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels = {"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
     private static final int RUN_COMMAND_PERMISSION_REQUEST = 4101;
-    private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;\n    private static final long CONNECTION_FRESH_MS = 20000L;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
 
@@ -97,24 +97,44 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+
         if (isCloseFromNotification(getIntent())) {
+            getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                    .putBoolean("monitor_enabled", false)
+                    .putBoolean("activity_visible", false).apply();
+            try { stopService(new Intent(this, ConnectionMonitorService.class)); } catch (RuntimeException ignored) {}
             finishAndRemoveTask();
             return;
         }
+
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("monitor_enabled", true)
+                .putBoolean("activity_visible", true).apply();
+
+        loadCachedPolicy();
         buildUi();
-        renderOffline();
+        render();
         ensureNotificationPermission();
-        ensureTermuxRunCommandPermission();
         if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) {
             startConnectionMonitor();
+        } else {
+            ensureTermuxRunCommandPermission();
         }
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (isCloseFromNotification(intent)) finishAndRemoveTask();
+        if (isCloseFromNotification(intent)) {
+            getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                    .putBoolean("monitor_enabled", false)
+                    .putBoolean("activity_visible", false).apply();
+            try { stopService(new Intent(this, ConnectionMonitorService.class)); } catch (RuntimeException ignored) {}
+            finishAndRemoveTask();
+        }
     }
 
     private boolean isCloseFromNotification(Intent intent) {
@@ -131,11 +151,10 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putBoolean("activity_visible", true)
-                .apply();
-        startConnectionMonitor();
+                .putBoolean("activity_visible", true).apply();
         applyMonitorSnapshot();
-        refreshStatusSnapshot();
+        loadCachedPolicy();
+        render();
     }
 
     @Override protected void onPause() {
@@ -146,30 +165,31 @@ public class MainActivity extends Activity {
     }
 
     private void startConnectionMonitor() {
-        android.content.SharedPreferences bridge =
-                getSharedPreferences("bridge", MODE_PRIVATE);
+        android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
         if (bridge.getBoolean("emergency_killed", false)) return;
+        if (!bridge.getBoolean("monitor_enabled", true)) return;
         try {
             Intent i = new Intent(this, ConnectionMonitorService.class);
-            if (android.os.Build.VERSION.SDK_INT >= 26) {
-                startForegroundService(i);
-            } else {
-                startService(i);
-            }
-        } catch (RuntimeException ignored) {
-            // Manual Connect / Refresh remains available if the monitor cannot start.
-        }
+            if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+        } catch (RuntimeException ignored) {}
     }
 
     private void applyMonitorSnapshot() {
-        android.content.SharedPreferences prefs =
-                getSharedPreferences("bridge", MODE_PRIVATE);
+        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
         long receivedAt = prefs.getLong("monitor_received_at", 0L);
-        if (receivedAt <= 0L || System.currentTimeMillis() - receivedAt > 30000L) return;
+        String json = prefs.getString("monitor_status_json", "");
+        if (receivedAt <= 0L || json == null || json.isEmpty()) {
+            connectionFresh = false;
+            showConnectionHeader();
+            return;
+        }
         try {
-            JSONObject o = new JSONObject(prefs.getString("monitor_status_json", ""));
-            applyConnectionSnapshot(o, receivedAt, "monitor");
-        } catch (Exception ignored) {}
+            applyConnectionSnapshot(new JSONObject(json), receivedAt, "monitor");
+        } catch (Exception ignored) {
+            connectionFresh = false;
+            showConnectionHeader();
+        }
     }
 
     private boolean applyConnectionSnapshot(JSONObject o, long receivedAt, String source) {
@@ -180,28 +200,31 @@ public class MainActivity extends Activity {
         if (connectionSnapshotAt > receivedAt) return connectionOk;
 
         boolean m = isMcpReady(o);
-        boolean pr = isProxyReady(o);
+        boolean p = isProxyReady(o);
         boolean t = isTunnelReady(o);
-        boolean ok = m && pr && t;
-        connectionOk = ok;
+        connectionOk = m && p && t;
+        connectionFresh = System.currentTimeMillis() - receivedAt <= CONNECTION_FRESH_MS;
         lastConnectionStatus = o;
         connectionSnapshotAt = receivedAt;
-        status.setText("●  " + (ok ? "Connected" : "Disconnected"));
-        status.setTextColor(ok ? GREEN : RED);
-        updateIndicators(o);
 
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putBoolean("monitor_connected", ok)
+                .putBoolean("monitor_connected", connectionOk)
+                .putBoolean("monitor_mcp", m)
+                .putBoolean("monitor_proxy", p)
+                .putBoolean("monitor_tunnel", t)
+                .putBoolean("monitor_fresh", connectionFresh)
                 .putLong("monitor_received_at", receivedAt)
                 .putString("monitor_status_json", o.toString())
                 .putString("monitor_state", "connection_snapshot_" + source)
                 .putString("monitor_last_event",
                         "Connection state: MCP " + (m ? "OK" : "DOWN")
-                                + " / Proxy " + (pr ? "OK" : "DOWN")
+                                + " / Proxy " + (p ? "OK" : "DOWN")
                                 + " / Tunnel " + (t ? "LIVE" : "DOWN"))
                 .putLong("monitor_last_event_at", System.currentTimeMillis())
                 .apply();
-        return ok;
+
+        showConnectionHeader();
+        return connectionOk;
     }
 
     private void ensureNotificationPermission() {
@@ -211,18 +234,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void refreshStatusSnapshot() {
-        if (busy || getSharedPreferences("bridge", MODE_PRIVATE)
-                .getBoolean("emergency_killed", false)) return;
-        clearCommandResult("status");
-        if (!McpBridge.run(this, "status")) return;
-        handler.postDelayed(() -> {
-            if (isFinishing()) return;
-            String error = commandError("status");
-            if (!error.isEmpty()) return;
-            applyStatusResult();
-        }, 700L);
-    }
+
 
     private void ensureTermuxRunCommandPermission() {
         // RUN_COMMAND is a Termux-managed Additional Permission. Android cannot
@@ -279,71 +291,66 @@ public class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(20), dp(20), dp(20), dp(14));
+        header.setPadding(dp(18), dp(8), dp(18), dp(7));
         header.setOnApplyWindowInsetsListener((v, insets) -> {
             int top = insets.getSystemWindowInsetTop();
-            v.setPadding(dp(20), dp(20) + top, dp(20), dp(14));
+            v.setPadding(dp(18), dp(6) + top, dp(18), dp(7));
             return insets;
         });
-        header.setBackgroundColor(BG);
 
         LinearLayout brand = new LinearLayout(this);
         brand.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView title = text("MCP Control", 25, TEXT);
+        TextView title = text("MCP Control", 21, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        brand.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
+        brand.addView(title, new LinearLayout.LayoutParams(0, dp(31), 1));
 
-        TextView signature = text("re3a  •  v0.2.1", 11, MUTED);
+        TextView signature = text("re3a • v0.2.1", 9, MUTED);
         signature.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        signature.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        brand.addView(signature, new LinearLayout.LayoutParams(dp(112), dp(36)));
+        brand.addView(signature, new LinearLayout.LayoutParams(dp(92), dp(31)));
         header.addView(brand);
 
-        status = text("●  Offline", 13, RED);
+        LinearLayout state = new LinearLayout(this);
+        state.setGravity(Gravity.CENTER_VERTICAL);
+        status = text("●  Checking", 12, YELLOW);
         status.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        status.setPadding(0, dp(6), 0, dp(10));
-        header.addView(status);
+        state.addView(status, new LinearLayout.LayoutParams(0, dp(23), 1));
+        statusAge = text("no snapshot", 9, MUTED);
+        statusAge.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        state.addView(statusAge, new LinearLayout.LayoutParams(dp(88), dp(23)));
+        header.addView(state);
 
         indicatorRow = new LinearLayout(this);
         indicatorRow.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(indicatorRow, new LinearLayout.LayoutParams(-1, dp(30)));
+        header.addView(indicatorRow, new LinearLayout.LayoutParams(-1, dp(22)));
         setInitialIndicators();
 
         LinearLayout actions = new LinearLayout(this);
-        actions.setPadding(0, dp(8), 0, 0);
-
         Button connect = button("Connect / Refresh", v -> refresh());
-        connect.setBackground(bg(TEXT, TEXT, 24));
+        connect.setBackground(bg(TEXT, TEXT, 18));
         connect.setTextColor(Color.WHITE);
-        actions.addView(connect, new LinearLayout.LayoutParams(0, dp(46), 1));
+        actions.addView(connect, new LinearLayout.LayoutParams(0, dp(38), 1));
 
-        Button lock = button("Lock", v -> lockAll());
-        lock.setBackground(bg(CARD, BORDER, 24));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(78), dp(46));
-        lp.setMargins(dp(8), 0, 0, 0);
-        actions.addView(lock, lp);
+        masterLockButton = button("Lock", v -> toggleMasterLock());
+        masterLockButton.setBackground(bg(CARD, BORDER, 18));
+        LinearLayout.LayoutParams lockLp = new LinearLayout.LayoutParams(dp(74), dp(38));
+        lockLp.setMargins(dp(7), 0, 0, 0);
+        actions.addView(masterLockButton, lockLp);
         header.addView(actions);
-
         root.addView(header);
 
         HorizontalScrollView tabs = new HorizontalScrollView(this);
         tabs.setHorizontalScrollBarEnabled(false);
         tabs.setBackgroundColor(CARD);
         tabBar = new LinearLayout(this);
-        tabBar.setPadding(dp(16), dp(8), dp(16), dp(8));
+        tabBar.setPadding(dp(12), dp(4), dp(12), dp(4));
         for (int i = 0; i < groups.length; i++) {
             final String g = groups[i];
             Button b = button(labels[i], v -> { group = g; render(); });
-            b.setTag(g);
-            b.setTextSize(11);
+            b.setTextSize(10);
             b.setSingleLine(true);
-            b.setMaxLines(1);
-            b.setIncludeFontPadding(false);
-            b.setGravity(Gravity.CENTER);
-            b.setPadding(dp(8), 0, dp(8), 0);
-            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(84), dp(40));
-            if (i > 0) tp.setMargins(dp(4), 0, 0, 0);
+            b.setPadding(dp(7), 0, dp(7), 0);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(78), dp(32));
+            if (i > 0) tp.setMargins(dp(3), 0, 0, 0);
             tabBar.addView(b, tp);
         }
         tabs.addView(tabBar);
@@ -353,15 +360,14 @@ public class MainActivity extends Activity {
         scrollView.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(16), dp(18), dp(16), dp(32));
+        content.setPadding(dp(14), dp(8), dp(14), dp(20));
         scrollView.addView(content);
         scrollView.setOnApplyWindowInsetsListener((v, insets) -> {
             int bottom = insets.getSystemWindowInsetBottom();
-            content.setPadding(dp(16), dp(18), dp(16), dp(32) + bottom);
+            content.setPadding(dp(14), dp(8), dp(14), dp(20) + bottom);
             return insets;
         });
         root.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1));
-
         setContentView(root);
         highlightTab();
     }
@@ -376,11 +382,11 @@ public class MainActivity extends Activity {
     private void addIndicator(String name, boolean ok) {
         LinearLayout item = new LinearLayout(this);
         item.setGravity(Gravity.CENTER_VERTICAL);
-        TextView dot = text("●", 18, ok ? GREEN : RED);
-        TextView nameText = text("  " + name + "  " + (ok ? "Ready" : "Offline"), 11, MUTED);
-        item.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(30)));
-        item.addView(nameText, new LinearLayout.LayoutParams(0, dp(30), 1));
-        indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(30), 1));
+        TextView dot = text("●", 12, ok ? GREEN : RED);
+        TextView n = text(" " + name + "  " + (ok ? "Ready" : "Offline"), 10, MUTED);
+        item.addView(dot, new LinearLayout.LayoutParams(dp(15), dp(22)));
+        item.addView(n, new LinearLayout.LayoutParams(0, dp(22), 1));
+        indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(22), 1));
     }
 
     private void highlightTab() {
@@ -399,18 +405,17 @@ public class MainActivity extends Activity {
     private void addCard(String title, String subtitle) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(16), dp(15), dp(16), dp(16));
-        box.setBackground(bg(CARD, BORDER, 18));
+        box.setPadding(dp(10), dp(8), dp(10), dp(9));
+        box.setBackground(bg(CARD, BORDER, 12));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(4), 0, dp(4));
+        p.setMargins(0, dp(3), 0, dp(3));
         content.addView(box, p);
-
-        TextView a = text(title, 19, TEXT);
+        TextView a = text(title, 14, TEXT);
         a.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         box.addView(a);
-        if (subtitle != null) {
-            TextView sub = text(subtitle, 11, MUTED);
-            sub.setPadding(0, dp(4), 0, 0);
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = text(subtitle, 9, MUTED);
+            sub.setPadding(0, dp(2), 0, 0);
             box.addView(sub);
         }
     }
@@ -418,111 +423,44 @@ public class MainActivity extends Activity {
     // Section headings are labels, not controls; keeping them out of cards reduces vertical scrolling.
     private void addSectionHeader(String title, String subtitle) {
         LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, dp(10), 0, dp(4));
-        TextView h = text(title, 16, TEXT);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(6), 0, dp(3));
+        TextView h = text(title, 14, TEXT);
         h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        row.addView(h, new LinearLayout.LayoutParams(-1, dp(24)));
+        row.addView(h, new LinearLayout.LayoutParams(0, dp(24), 1));
         if (subtitle != null && !subtitle.isEmpty()) {
-            TextView sub = text(subtitle, 11, MUTED);
-            row.addView(sub, new LinearLayout.LayoutParams(-1, dp(20)));
+            TextView sub = text(subtitle, 9, MUTED);
+            sub.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(sub, new LinearLayout.LayoutParams(dp(160), dp(24)));
         }
         content.addView(row, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void addMasterBanner(boolean locked) {
-        LinearLayout box = new LinearLayout(this);
-        box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setPadding(dp(16), dp(14), dp(16), dp(14));
-        box.setBackground(bg(locked ? 0xfffff1f1 : 0xffeef8f3, locked ? 0xfff0caca : 0xffcfe9dc, 18));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(4), 0, dp(4));
-        content.addView(box, p);
-
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-        TextView h = text("Master Lock", 16, locked ? RED : GREEN);
-        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        copy.addView(h);
-        copy.addView(text(locked ? "All capabilities are effectively denied" : "Policy is active", 11, MUTED));
-        box.addView(copy, new LinearLayout.LayoutParams(0, dp(52), 1));
-
-        Button action = button(locked ? "Unlock" : "Lock", v -> { if (locked) unlockAll(); else lockAll(); });
-        action.setBackground(bg(CARD, locked ? 0xffe7bcbc : 0xffc7dfd1, 22));
-        box.addView(action, new LinearLayout.LayoutParams(dp(92), dp(42)));
-        lockBanner = h;
+        // Master Lock is intentionally represented only by the single header control.
     }
 
     private View metric(String name, String value, int color) {
         LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER);
-        box.setPadding(dp(8), dp(8), dp(8), dp(8));
-        box.setBackground(bg(CARD, BORDER, 16));
-        TextView n = text(name, 10, MUTED);
-        n.setGravity(Gravity.CENTER);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setPadding(dp(8), dp(6), dp(8), dp(6));
+        box.setBackground(bg(CARD, BORDER, 11));
+        TextView n = text(name, 9, MUTED);
         n.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(n, new LinearLayout.LayoutParams(-1, dp(18)));
-        TextView v = text(value, 18, color);
-        v.setGravity(Gravity.CENTER);
+        box.addView(n, new LinearLayout.LayoutParams(0, dp(28), 1));
+        TextView v = text(value, 12, color);
+        v.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(v, new LinearLayout.LayoutParams(-1, dp(28)));
+        box.addView(v, new LinearLayout.LayoutParams(dp(62), dp(28)));
         return box;
     }
 
     private void addBridgeConnectionCard(boolean m, boolean p, boolean t) {
-        addSectionHeader("Bridge & Connection", "Local services");
-        LinearLayout row = new LinearLayout(this);
-        row.setPadding(0, dp(3), 0, 0);
-        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED),
-                new LinearLayout.LayoutParams(0, dp(70), 1));
-        LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(70), 1);
-        q.setMargins(dp(6), 0, 0, 0);
-        row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED), q);
-        q = new LinearLayout.LayoutParams(0, dp(70), 1);
-        q.setMargins(dp(6), 0, 0, 0);
-        row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
-        content.addView(row);
-
-        logHost = new LinearLayout(this);
-        logHost.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams logLp = new LinearLayout.LayoutParams(-1, -2);
-        logLp.setMargins(0, dp(6), 0, 0);
-        content.addView(logHost, logLp);
-
-        Button connect = button("Connect / Refresh", v -> refresh());
-        connect.setBackground(bg(TEXT, TEXT, 22));
-        connect.setTextColor(Color.WHITE);
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(42));
-        cp.setMargins(0, dp(7), 0, 0);
-        content.addView(connect, cp);
+        addConnectionSummary();
     }
 
     private void renderOffline() {
-        status.setText("●  " + (connectionOk ? "Connected" : "Offline"));
-        status.setTextColor(connectionOk ? GREEN : RED);
-        if (connectionOk && lastConnectionStatus != null) updateIndicators(lastConnectionStatus);
-        content.removeAllViews();
-
-        addSectionHeader("System Overview", "Secure local controller");
-        boolean locked = policy != null
-                ? policy.optBoolean("master_lock", true)
-                : getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("master_lock", true);
-        addMasterBanner(locked);
-        JSONObject bridgeStatus = lastConnectionStatus;
-        if (bridgeStatus == null) {
-            try {
-                String cached = getSharedPreferences("bridge", MODE_PRIVATE)
-                        .getString("monitor_status_json", "");
-                if (cached != null && !cached.isEmpty()) bridgeStatus = new JSONObject(cached);
-            } catch (Exception ignored) {}
-        }
-        addBridgeConnectionCard(
-                bridgeStatus != null && isMcpReady(bridgeStatus),
-                bridgeStatus != null && isProxyReady(bridgeStatus),
-                bridgeStatus != null && isTunnelReady(bridgeStatus));
-
-        highlightTab();
+        render();
     }
 
     private void render() {
@@ -627,43 +565,43 @@ public class MainActivity extends Activity {
 
     private void addCapabilityRow(JSONObject x, boolean locked) {
         String id=x.optString("id");
-        String name=x.optString("label",id);
+        String name=x.optString("label","");
         String description=x.optString("description","");
         String state=x.optString("state","deny");
+        if(name.isEmpty()) name=description.isEmpty()?id:description;
 
         LinearLayout box=new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(15),dp(14),dp(15),dp(17));
-        box.setBackground(bg(CARD,BORDER,18));
+        box.setPadding(dp(10),dp(8),dp(10),dp(8));
+        box.setBackground(bg(CARD,BORDER,12));
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
-        bp.setMargins(0,dp(4),0,dp(4));
+        bp.setMargins(0,dp(3),0,dp(3));
         content.addView(box,bp);
 
         LinearLayout top=new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView dot=text("●",13,locked?RED:stateColor(state));
-        top.addView(dot,new LinearLayout.LayoutParams(dp(20),dp(28)));
-        TextView title=text(name,15,TEXT);
+        TextView dot=text("●",10,locked?RED:stateColor(state));
+        top.addView(dot,new LinearLayout.LayoutParams(dp(15),dp(21)));
+        TextView title=text(name,12,TEXT);
         title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        top.addView(title,new LinearLayout.LayoutParams(0,dp(28),1));
-        TextView st=text(locked?"DENY":state.toUpperCase(),10,locked?RED:stateColor(state));
+        top.addView(title,new LinearLayout.LayoutParams(0,dp(21),1));
+        TextView st=text(locked?"DENY":state.toUpperCase(),8,locked?RED:stateColor(state));
         st.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
         st.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        top.addView(st,new LinearLayout.LayoutParams(dp(62),dp(28)));
+        top.addView(st,new LinearLayout.LayoutParams(dp(50),dp(21)));
         box.addView(top);
 
-        if(!description.isEmpty()) {
-            TextView d=text(description,11,MUTED);
-            d.setPadding(dp(20),dp(2),0,dp(5));
+        if(!description.isEmpty()&&!description.equals(name)){
+            TextView d=text(description,9,MUTED);
+            d.setPadding(dp(15),0,0,dp(1));
             box.addView(d);
         }
 
-        TextView idText=text(id,9,0xff999b98);
-        idText.setPadding(dp(20),0,0,dp(8));
+        TextView idText=text(id,8,0xff999b98);
+        idText.setPadding(dp(15),0,0,dp(4));
         box.addView(idText);
 
         LinearLayout choices=new LinearLayout(this);
-        choices.setPadding(0, 0, dp(2), 0);
         addStateButton(choices,"Deny","deny",id,state,locked);
         addStateButton(choices,"Ask","ask",id,state,locked);
         addStateButton(choices,"Allow","allow",id,state,locked);
@@ -677,15 +615,15 @@ public class MainActivity extends Activity {
     }
 
     private void addStateButton(LinearLayout row,String label,String target,String id,String current,boolean locked) {
-        Button b=button((target.equals(current) ? "✓  " : "") + label,v->runSet(id,target));
         boolean selected=target.equals(current);
-        b.setEnabled(!locked && !busy);
+        Button b=button((selected?"✓  ":"")+label,v->runSet(id,target));
+        b.setEnabled(!locked&&!busy);
+        b.setTextSize(10);
         b.setTextColor(selected?TEXT:MUTED);
         b.setTypeface(Typeface.DEFAULT,selected?Typeface.BOLD:Typeface.NORMAL);
-        b.setBackground(bg(selected?CARD_SOFT:0xfffaf9f6,selected?BORDER:BORDER,22));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(46),1);
-        if(row.getChildCount()>0)p.setMargins(dp(5),0,0,0);
-        else p.setMargins(0,0,dp(1),0);
+        b.setBackground(bg(selected?CARD_SOFT:0xfffaf9f6,BORDER,17));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(33),1);
+        if(row.getChildCount()>0)p.setMargins(dp(4),0,0,0);
         row.addView(b,p);
     }
 
@@ -740,6 +678,120 @@ public class MainActivity extends Activity {
         t.setTextIsSelectable(true);
         box.addView(t);
         content.addView(box, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void loadCachedPolicy() {
+        try {
+            String cached = getSharedPreferences("bridge", MODE_PRIVATE).getString("policy_json", "");
+            if (cached != null && !cached.isEmpty()) {
+                JSONObject o = new JSONObject(cached);
+                if (o.has("master_lock") && o.has("capabilities")) {
+                    policy = o;
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+        if (policy == null) {
+            try {
+                policy = new JSONObject()
+                        .put("master_lock", getSharedPreferences("bridge", MODE_PRIVATE)
+                                .getBoolean("master_lock", true))
+                        .put("capabilities", new JSONObject());
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void showConnectionHeader() {
+        if (status == null) return;
+
+        if (!connectionFresh) {
+            status.setText("●  Checking");
+            status.setTextColor(YELLOW);
+        } else {
+            status.setText("●  " + (connectionOk ? "Connected" : "Disconnected"));
+            status.setTextColor(connectionOk ? GREEN : RED);
+        }
+
+        if (statusAge != null) {
+            long at = connectionSnapshotAt;
+            statusAge.setText(at <= 0 ? "no snapshot" :
+                    formatAge(System.currentTimeMillis() - at));
+            statusAge.setTextColor(connectionFresh ? MUTED : YELLOW);
+        }
+
+        if (masterLockButton != null) {
+            boolean locked = policy != null && policy.optBoolean("master_lock", true);
+            masterLockButton.setText(locked ? "Unlock" : "Lock");
+        }
+
+        if (indicatorRow != null && lastConnectionStatus != null) {
+            updateIndicators(lastConnectionStatus);
+        }
+    }
+
+    private String formatAge(long ms) {
+        if (ms < 0) ms = 0;
+        long sec = ms / 1000L;
+        if (sec < 60) return sec + "s ago";
+        long min = sec / 60L;
+        return min + "m " + (sec % 60L) + "s ago";
+    }
+
+    private void addConnectionSummary() {
+        boolean have = lastConnectionStatus != null;
+        boolean m = have && isMcpReady(lastConnectionStatus);
+        boolean p = have && isProxyReady(lastConnectionStatus);
+        boolean t = have && isTunnelReady(lastConnectionStatus);
+
+        addSectionHeader("Connection",
+                connectionFresh ? "fresh" :
+                        (connectionSnapshotAt <= 0 ? "waiting" :
+                                "last known • " + formatAge(System.currentTimeMillis() - connectionSnapshotAt)));
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(8), dp(7), dp(8), dp(8));
+        box.setBackground(bg(CARD, BORDER, 13));
+
+        LinearLayout row = new LinearLayout(this);
+        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED),
+                new LinearLayout.LayoutParams(0, dp(42), 1));
+        LinearLayout q = new LinearLayout.LayoutParams(0, dp(42), 1);
+        q.setMargins(dp(5), 0, 0, 0);
+        row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED), q);
+        q = new LinearLayout.LayoutParams(0, dp(42), 1);
+        q.setMargins(dp(5), 0, 0, 0);
+        row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
+        box.addView(row);
+
+        TextView note = text("The background monitor is the single connection source of truth.", 9, MUTED);
+        note.setPadding(dp(2), dp(5), dp(2), 0);
+        box.addView(note);
+
+        logHost = new LinearLayout(this);
+        logHost.setOrientation(LinearLayout.VERTICAL);
+        box.addView(logHost);
+        content.addView(box, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void showDiagnosticsDetail(String event, String callback, String stage,
+                                       long sent, long received, String err) {
+        StringBuilder b = new StringBuilder(event)
+                .append("\ncallback: ").append(callback)
+                .append(stage.isEmpty() ? "" : " / " + stage)
+                .append("\nsent: ").append(sent)
+                .append("  received: ").append(received);
+        if (connectionSnapshotAt > 0) {
+            b.append("\nmonitor snapshot: ")
+                    .append(formatAge(System.currentTimeMillis() - connectionSnapshotAt));
+        }
+        if (!err.isEmpty()) b.append("\nerror: ").append(err);
+        addLogBox(b.toString());
+    }
+
+    private void toggleMasterLock() {
+        boolean locked = policy != null && policy.optBoolean("master_lock", true);
+        if (locked) unlockAll(); else lockAll();
     }
 
     private void clearOutput() {
