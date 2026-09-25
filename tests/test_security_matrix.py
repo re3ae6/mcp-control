@@ -196,7 +196,7 @@ class SecurityMatrixTests(unittest.TestCase):
         module = self._guarded_module()
         ask = types.SimpleNamespace(allowed=False, requires_approval=True)
         approval_item = {"approval_id": "a1", "expires_at": "2099-01-01T00:00:00+00:00"}
-        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "request_approval", return_value=approval_item), patch.object(module, "record"):
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "request_approval_bundle", return_value=approval_item), patch.object(module, "record"):
             result = module.guarded_call(None, "run", {"cmd": "echo ok"})
         self.assertTrue(result["isError"])
         self.assertIn("approval_id=a1", result["content"][0]["text"])
@@ -230,7 +230,7 @@ class SecurityMatrixTests(unittest.TestCase):
     def test_guarded_server_tampered_approval_never_executes(self):
         module = self._guarded_module()
         ask = types.SimpleNamespace(allowed=False, requires_approval=True)
-        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval", side_effect=PermissionError("approval_request_mismatch")), patch.object(module, "record"):
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval_bundle", side_effect=PermissionError("approval_request_mismatch")), patch.object(module, "record"):
             result = module.guarded_call(None, "run", {"cmd": "echo tampered", "approval_id": "a1"})
         self.assertTrue(result["isError"])
         self.assertIn("approval_request_mismatch", result["content"][0]["text"])
