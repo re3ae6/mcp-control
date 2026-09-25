@@ -81,7 +81,8 @@ public class MainActivity extends Activity {
         b.setMinimumHeight(0);
         b.setMinWidth(0);
         b.setMinimumWidth(0);
-        b.setPadding(dp(12), 0, dp(12), 0);
+        b.setPadding(dp(12), dp(2), dp(12), dp(2));
+        b.setIncludeFontPadding(false);
         b.setOnClickListener(l);
         return b;
     }
@@ -263,6 +264,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Section headings are labels, not controls; keeping them out of cards reduces vertical scrolling.
+    private void addSectionHeader(String title, String subtitle) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, dp(10), 0, dp(4));
+        TextView h = text(title, 16, TEXT);
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        row.addView(h, new LinearLayout.LayoutParams(-1, dp(24)));
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = text(subtitle, 11, MUTED);
+            row.addView(sub, new LinearLayout.LayoutParams(-1, dp(20)));
+        }
+        content.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
     private void addMasterBanner(boolean locked) {
         LinearLayout box = new LinearLayout(this);
         box.setGravity(Gravity.CENTER_VERTICAL);
@@ -302,7 +318,7 @@ public class MainActivity extends Activity {
     }
 
     private void addBridgeConnectionCard(boolean m, boolean p, boolean t) {
-        addCard("Bridge & Connection", "Local services");
+        addSectionHeader("Bridge & Connection", "Local services");
         LinearLayout row = new LinearLayout(this);
         row.setPadding(0, dp(3), 0, 0);
         row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED),
@@ -329,7 +345,7 @@ public class MainActivity extends Activity {
         if (connectionOk && lastConnectionStatus != null) updateIndicators(lastConnectionStatus);
         content.removeAllViews();
 
-        addCard("System Overview", "Secure local controller");
+        addSectionHeader("System Overview", "Secure local controller");
         addMasterBanner(true);
         addBridgeConnectionCard(false, false, false);
 
@@ -344,7 +360,7 @@ public class MainActivity extends Activity {
         highlightTab();
 
         if ("overview".equals(group)) {
-            addCard("System Overview", "Secure local controller");
+            addSectionHeader("System Overview", "Secure local controller");
             addMasterBanner(locked);
             if (connectionOk && lastConnectionStatus != null) {
                 addBridgeConnectionCard(
@@ -354,7 +370,7 @@ public class MainActivity extends Activity {
                                 || lastConnectionStatus.optString("tunnel", "").toLowerCase().contains("ready"));
             }
 
-            addCard("Policy", "Effective capability states");
+            addSectionHeader("Policy", "Effective capability states");
             LinearLayout counts = new LinearLayout(this);
             int[] c = countStates();
             counts.addView(metric("DENY", String.valueOf(c[0]), RED), new LinearLayout.LayoutParams(0, dp(76), 1));
@@ -366,7 +382,7 @@ public class MainActivity extends Activity {
             counts.addView(metric("ALLOW", String.valueOf(c[2]), GREEN), q);
             content.addView(counts);
 
-            addCard("Actions", "Service control");
+            addSectionHeader("Actions", "Service control");
             Button start = button("Start MCP", v -> { if (!busy) refresh(); });
             start.setBackground(bg(CARD, BORDER, 24));
             content.addView(start, new LinearLayout.LayoutParams(-1, dp(46)));
@@ -376,7 +392,7 @@ public class MainActivity extends Activity {
             p.setMargins(0, dp(7), 0, 0);
             content.addView(restart, p);
 
-            addCard("Approvals", "Pending one-shot requests");
+            addSectionHeader("Approvals", "Pending one-shot requests");
             Button approvals = button("Check pending approvals", v -> loadApprovals());
             approvals.setBackground(bg(CARD, BORDER, 24));
             LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(46));
@@ -391,7 +407,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        addCard(labels[indexOf(group)], "Capability policy  •  default deny");
+        addSectionHeader(labels[indexOf(group)], "Capability policy  •  default deny");
         if (locked) addMasterBanner(true);
 
         JSONObject caps = policy.optJSONObject("capabilities");
@@ -438,7 +454,7 @@ public class MainActivity extends Activity {
 
         LinearLayout box=new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(15),dp(14),dp(15),dp(14));
+        box.setPadding(dp(15),dp(14),dp(15),dp(17));
         box.setBackground(bg(CARD,BORDER,18));
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
         bp.setMargins(0,dp(4),0,dp(4));
@@ -488,7 +504,7 @@ public class MainActivity extends Activity {
         b.setTextColor(selected?TEXT:MUTED);
         b.setTypeface(Typeface.DEFAULT,selected?Typeface.BOLD:Typeface.NORMAL);
         b.setBackground(bg(selected?CARD_SOFT:0xfffaf9f6,selected?BORDER:BORDER,22));
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(40),1);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(46),1);
         if(row.getChildCount()>0)p.setMargins(dp(5),0,0,0);
         else p.setMargins(0,0,dp(1),0);
         row.addView(b,p);
