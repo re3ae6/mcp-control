@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - "android/**"
+      - "core/**"
+      - "tests/**"
       - ".github/workflows/android-debug.yml"
 
 permissions:
