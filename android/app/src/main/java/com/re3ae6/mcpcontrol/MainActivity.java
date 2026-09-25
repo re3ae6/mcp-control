@@ -28,6 +28,7 @@ public class MainActivity extends Activity {
     private ScrollView scrollView;
     private TextView status, lockBanner;
     private JSONObject policy;
+    private JSONArray pendingApprovals = new JSONArray();
     private String group = "overview";
     private boolean busy = false;
     private boolean connectionOk = false;
@@ -345,6 +346,13 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(46));
             p.setMargins(0, dp(7), 0, 0);
             content.addView(restart, p);
+
+            addCard("Approvals", "Pending one-shot requests");
+            Button approvals = button("Check pending approvals", v -> loadApprovals());
+            approvals.setBackground(bg(CARD, BORDER, 24));
+            LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(46));
+            ap.setMargins(0, dp(7), 0, 0);
+            content.addView(approvals, ap);
             return;
         }
 
@@ -694,6 +702,92 @@ public class MainActivity extends Activity {
                 busy = false;
                 render();
             }, 550L);
+        }, 650L);
+    }
+
+    private void loadApprovals() {
+        if (busy) return;
+        busy = true;
+        status.setText("●  Checking approvals…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("approvals");
+        if (!McpBridge.run(this, "approvals")) {
+            operationFailure("Could not query pending approvals.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("approvals");
+            if (!error.isEmpty()) {
+                operationFailure(error);
+                return;
+            }
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_approvals", "");
+            try {
+                JSONObject o = new JSONObject(out);
+                JSONArray a = o.optJSONArray("approvals");
+                pendingApprovals = a == null ? new JSONArray() : a;
+            } catch (Exception ignored) {
+                pendingApprovals = new JSONArray();
+            }
+            busy = false;
+            render();
+            if ("overview".equals(group)) addPendingApprovalsCard();
+        }, 650L);
+    }
+
+    private void addPendingApprovalsCard() {
+        int count = pendingApprovals.length();
+        addCard("Approval Queue", count == 0 ? "No pending requests" : count + " request" + (count == 1 ? "" : "s") + " awaiting approval");
+        if (count == 0) {
+            content.addView(text("Nothing needs approval right now.", 13, MUTED));
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            JSONObject item = pendingApprovals.optJSONObject(i);
+            if (item == null) continue;
+            String id = item.optString("approval_id", "");
+            String capability = item.optString("capability", "unknown");
+            String tool = item.optString("tool", "unknown");
+            String expires = item.optString("expires_at", "");
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(14), dp(12), dp(14), dp(12));
+            row.setBackground(bg(CARD, BORDER, 16));
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2);
+            rp.setMargins(0, dp(5), 0, dp(5));
+            content.addView(row, rp);
+            TextView title = text(capability + "  •  " + tool, 14, TEXT);
+            title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            row.addView(title);
+            row.addView(text("Expires: " + expires, 10, MUTED));
+            Button approve = button("Approve", v -> runApproval(id));
+            approve.setBackground(bg(CARD_SOFT, BORDER, 22));
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(40));
+            bp.setMargins(0, dp(8), 0, 0);
+            row.addView(approve, bp);
+        }
+    }
+
+    private void runApproval(String id) {
+        if (busy || id.isEmpty()) return;
+        busy = true;
+        status.setText("●  Approving…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("approve");
+        if (!McpBridge.run(this, "approve", id)) {
+            operationFailure("Could not approve the request.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("approve");
+            if (!error.isEmpty()) {
+                operationFailure(error);
+                return;
+            }
+            busy = false;
+            loadApprovals();
         }, 650L);
     }
 
