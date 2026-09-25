@@ -211,7 +211,7 @@ The control plane is complete only when:
 - Android status lights now consume the actual `mcp/proxy/tunnel` status fields.
 - Android notification is a minimal native-style monitor with MCP / Proxy / Tunnel lights and LOCK / KILL / EXIT actions.
 - Removed the unused callback Activity, obsolete bridge wrapper script, and legacy launcher icon duplicates.
-- The next implementation step is to make each of the eight areas expose concrete, correctly mapped actions rather than policy-only rows.
+- Added a concrete action catalog for Files, Git, Terminal, Network, MCP, Device and Dangerous; CI verifies every catalog action resolves to a declared policy capability.
 
 ## 18. Latest UI Fixes
 - Reworked the Android UI into a light/cream, spacious security-dashboard layout with rounded controls, card-based hierarchy, clean alignment, and English labels for reliable rendering.
