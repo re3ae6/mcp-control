@@ -293,7 +293,7 @@ public class MainActivity extends Activity {
         addMasterBanner(true);
         addStatusCard(false, false, false);
 
-        addCard("Ready when you are", "The bridge is offline. Controls remain safe and visible.");
+        addCard("Bridge Offline", "Controls remain safe and visible. Connect to bring the bridge online.");
         Button b = button("Connect / Refresh", v -> refresh());
         b.setBackground(bg(TEXT, TEXT, 24));
         b.setTextColor(Color.WHITE);
