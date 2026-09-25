@@ -24,16 +24,10 @@ _original = mcp_core.call_tool
 
 def guarded_call(session, name, params, on_progress=None):
     decisions = [capability_for_tool(name)]
-    # decisions already built above
     if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", "")).strip()
-        if command.startswith("git pull"): decisions.append("git.pull")
-        elif command.startswith("git status"): decisions.append("git.status")
-        elif command.startswith("git diff"): decisions.append("git.diff")
-        elif command.startswith("git add"): decisions.append("git.add")
-        elif command.startswith("git commit"): decisions.append("git.commit")
-        elif command.startswith("git push"): decisions.append("git.push")
-        elif command.startswith("git switch") or command.startswith("git checkout") or command.startswith("git branch"): decisions.append("git.branch")
+        git_cap = git_capability_for_command(command)
+        if git_cap and git_cap not in decisions: decisions.append(git_cap)
     for extra in secondary_for_tool(name):
         if extra not in decisions: decisions.append(extra)
 
