@@ -9,6 +9,8 @@ Normal MCP execution remains blocked while MASTER LOCK is enabled.
 - Default DENY.
 - Effective states: deny / ask / allow.
 - MASTER LOCK is a hard global override: every normal MCP capability becomes DENY.
+- Android Emergency LOCK is an additional fail-closed execution stop; read-only status/policy remain available.
+- Android KILL stops the foreground monitor and persists the Emergency LOCK until local recovery.
 - Unknown/unmapped tools resolve to `dangerous.outside_allowlist`.
 - MCP tools cannot grant themselves permissions.
 - ASK is not ALLOW.
@@ -99,6 +101,7 @@ Exactly eight areas:
 UI requirements:
 - Persistent Connect / Refresh action.
 - Persistent Master Lock control.
+- Android notification provides three connection lights and minimal LOCK / KILL / EXIT actions.
 - Green/red status indicators for MCP, Proxy and Tunnel.
 - Yellow status for connecting/waiting.
 - Capability rows expose their current DENY / ASK / ALLOW state.
@@ -206,6 +209,8 @@ The control plane is complete only when:
 - Launcher: `tools/mcp_control.sh`.
 - Android app bridge: `tools/mobile_control.sh`.
 - Android status lights now consume the actual `mcp/proxy/tunnel` status fields.
+- Android notification is a minimal native-style monitor with MCP / Proxy / Tunnel lights and LOCK / KILL / EXIT actions.
+- Removed the unused callback Activity, obsolete bridge wrapper script, and legacy launcher icon duplicates.
 - The next implementation step is to make each of the eight areas expose concrete, correctly mapped actions rather than policy-only rows.
 
 ## 18. Latest UI Fixes
