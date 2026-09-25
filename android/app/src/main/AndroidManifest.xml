@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <queries><package android:name="com.termux" /></queries>
     <application
@@ -20,7 +20,11 @@
         </activity>
         <service android:name=".ConnectionMonitorService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Continuous local MCP/Termux connection monitoring while the user keeps MCP Control enabled." />
+        </service>
         <service android:name=".PluginResultsService" android:exported="false" />
         <receiver android:name=".PluginResultsReceiver" android:exported="true" />
         <activity android:name=".PluginResultsActivity" android:exported="false" />
