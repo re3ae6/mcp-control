@@ -16,6 +16,9 @@ import org.json.JSONObject;
 
 public class ConnectionMonitorService extends Service {
     private static final String CHANNEL_ID = "mcp_connection_monitor";
+    private static final String ACTION_LOCK = "com.re3ae6.mcpcontrol.LOCK";
+    private static final String ACTION_KILL = "com.re3ae6.mcpcontrol.KILL";
+    private static final String ACTION_EXIT = "com.re3ae6.mcpcontrol.EXIT";
     private static final int NOTIFICATION_ID = 4201;
     private static final long INTERVAL_MS = 10000L;
     private static final long RESULT_WAIT_MS = 1600L;
@@ -120,10 +123,20 @@ public class ConnectionMonitorService extends Service {
                 this, 4202, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        Intent lock = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_LOCK);
+        PendingIntent lockIntent = PendingIntent.getService(
+                this, 4203, lock,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent kill = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_KILL);
+        PendingIntent killIntent = PendingIntent.getService(
+                this, 4204, kill,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Intent exit = new Intent(this, ConnectionMonitorService.class)
-                .setAction("com.re3ae6.mcpcontrol.EXIT");
+                .setAction(ACTION_EXIT);
         PendingIntent exitIntent = PendingIntent.getService(
-                this, 4203, exit,
+                this, 4205, exit,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         String ready = "● READY";
@@ -141,8 +154,9 @@ public class ConnectionMonitorService extends Service {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(new Notification.Action.Builder(
-                        null, "EXIT", exitIntent).build())
+                .addAction(new Notification.Action.Builder(null, "LOCK", lockIntent).build())
+                .addAction(new Notification.Action.Builder(null, "KILL", killIntent).build())
+                .addAction(new Notification.Action.Builder(null, "EXIT", exitIntent).build())
                 .build();
     }
 
@@ -164,10 +178,32 @@ public class ConnectionMonitorService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "com.re3ae6.mcpcontrol.EXIT".equals(intent.getAction())) {
-            stopForeground(true);
-            stopSelf();
-            return START_NOT_STICKY;
+        if (intent != null) {
+            String action = intent.getAction();
+            android.content.SharedPreferences prefs =
+                    getSharedPreferences("bridge", MODE_PRIVATE);
+
+            if (ACTION_LOCK.equals(action)) {
+                prefs.edit().putBoolean("emergency_locked", true).apply();
+                updateNotification();
+                return START_STICKY;
+            }
+
+            if (ACTION_KILL.equals(action)) {
+                prefs.edit()
+                        .putBoolean("emergency_locked", true)
+                        .putBoolean("emergency_killed", true)
+                        .apply();
+                stopForeground(true);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+
+            if (ACTION_EXIT.equals(action)) {
+                stopForeground(true);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
         }
         return START_STICKY;
     }
