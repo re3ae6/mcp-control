@@ -9,7 +9,7 @@ import android.os.Build;
 public final class McpBridge {
     private McpBridge() {}
 
-    public static void run(Context context, String... args) {
+    public static boolean run(Context context, String... args) {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
@@ -20,6 +20,7 @@ public final class McpBridge {
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
 
         Intent result = new Intent(context, PluginResultsService.class);
+        result.putExtra("mcp_control_command", args.length == 0 ? "" : args[0]);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
         int flags = PendingIntent.FLAG_ONE_SHOT;
         if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_MUTABLE;
@@ -27,9 +28,13 @@ public final class McpBridge {
                 PendingIntent.getService(context, code, result, flags));
         try {
             context.startService(i);
-        } catch (RuntimeException ignored) {
-            // Termux may be unavailable or RUN_COMMAND may not be granted.
-            // The control app must remain open in offline mode.
+            return true;
+        } catch (RuntimeException e) {
+            context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
+                    .putString("last_error", "Termux bridge: " + String.valueOf(e.getMessage()))
+                    .putLong("last_error_at", System.currentTimeMillis())
+                    .apply();
+            return false;
         }
     }
 }
