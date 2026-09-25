@@ -75,6 +75,8 @@ public class MainActivity extends Activity {
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
         b.setPadding(dp(12), 0, dp(12), 0);
         b.setOnClickListener(l);
         return b;
@@ -165,7 +167,9 @@ public class MainActivity extends Activity {
             b.setIncludeFontPadding(false);
             b.setGravity(Gravity.CENTER);
             b.setPadding(dp(8), 0, dp(8), 0);
-            tabBar.addView(b, new LinearLayout.LayoutParams(dp(92), dp(40)));
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(84), dp(40));
+            if (i > 0) tp.setMargins(dp(4), 0, 0, 0);
+            tabBar.addView(b, tp);
         }
         tabs.addView(tabBar);
         root.addView(tabs);
@@ -197,11 +201,11 @@ public class MainActivity extends Activity {
     private void addIndicator(String name, boolean ok) {
         LinearLayout item = new LinearLayout(this);
         item.setGravity(Gravity.CENTER_VERTICAL);
-        TextView dot = text("●", 12, ok ? GREEN : RED);
+        TextView dot = text("●", 18, ok ? GREEN : RED);
         TextView nameText = text("  " + name + "  " + (ok ? "Ready" : "Offline"), 11, MUTED);
-        item.addView(dot, new LinearLayout.LayoutParams(dp(14), dp(28)));
-        item.addView(nameText, new LinearLayout.LayoutParams(0, dp(28), 1));
-        indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(28), 1));
+        item.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(30)));
+        item.addView(nameText, new LinearLayout.LayoutParams(0, dp(30), 1));
+        indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(30), 1));
     }
 
     private void highlightTab() {
@@ -421,6 +425,7 @@ public class MainActivity extends Activity {
         box.addView(idText);
 
         LinearLayout choices=new LinearLayout(this);
+        choices.setPadding(0, 0, dp(2), 0);
         addStateButton(choices,"Deny","deny",id,state,locked);
         addStateButton(choices,"Ask","ask",id,state,locked);
         addStateButton(choices,"Allow","allow",id,state,locked);
@@ -441,7 +446,8 @@ public class MainActivity extends Activity {
         b.setTypeface(Typeface.DEFAULT,selected?Typeface.BOLD:Typeface.NORMAL);
         b.setBackground(bg(selected?CARD_SOFT:0xfffaf9f6,selected?BORDER:BORDER,22));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(40),1);
-        if(row.getChildCount()>0)p.setMargins(dp(6),0,0,0);
+        if(row.getChildCount()>0)p.setMargins(dp(5),0,0,0);
+        else p.setMargins(0,0,dp(1),0);
         row.addView(b,p);
     }
 
