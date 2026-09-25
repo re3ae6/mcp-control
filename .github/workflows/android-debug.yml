@@ -22,6 +22,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install launcher icons
+        run: |
+          rm -rf ../.icon_install_tmp
+          mkdir -p ../.icon_install_tmp
+          unzip -q ../MCP_CONTROL_Android_Icons.zip -d ../.icon_install_tmp
+          for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+            src="$(find ../.icon_install_tmp -type d -name "mipmap-$density" -print -quit)"
+            if [ -n "$src" ]; then
+              mkdir -p "app/src/main/res/mipmap-$density"
+              cp -f "$src"/* "app/src/main/res/mipmap-$density"/
+            fi
+          done
+          rm -rf ../.icon_install_tmp
+          test -f app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
