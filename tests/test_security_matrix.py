@@ -129,6 +129,19 @@ class SecurityMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(PermissionError, "trusted_control_action_denied:unlock"):
             trusted_control.dispatch("unlock", confirmation="UNLOCK", local_ui=True)
 
+    def test_each_control_area_has_concrete_mapped_actions(self):
+        from core.capability_map import AREA_TOOL_ACTIONS, capability_for_tool
+        canonical = Path(__file__).resolve().parents[1] / "policies" / "default.json"
+        policy_data = json.loads(canonical.read_text(encoding="utf-8"))
+        ids = {item["id"] for group in policy_data["capabilities"].values() for item in group}
+        expected = {"files","git","terminal","network","mcp","device","dangerous"}
+        self.assertEqual(set(AREA_TOOL_ACTIONS), expected)
+        for area, tools in AREA_TOOL_ACTIONS.items():
+            self.assertTrue(tools, area)
+            for tool in tools:
+                cap = capability_for_tool(tool)
+                self.assertIn(cap, ids, f"{area}:{tool}->{cap}")
+
     def test_explicit_tool_mapping_is_covered_by_policy(self):
         canonical = Path(__file__).resolve().parents[1] / "policies" / "default.json"
         policy_data = json.loads(canonical.read_text(encoding="utf-8"))
