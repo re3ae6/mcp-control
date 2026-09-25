@@ -5,12 +5,12 @@ import android.content.Intent;
 import android.os.Bundle;
 
 public class PluginResultsService extends IntentService {
-    static final String BUNDLE = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE";
-    static final String STDOUT = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE_STDOUT";
-    static final String STDERR = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE_STDERR";
-    static final String EXIT = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE_EXIT_CODE";
-    static final String ERR = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE_ERR";
-    static final String ERRMSG = "com.termux.service.EXTRA_PLUGIN_RESULT_BUNDLE_ERRMSG";
+    static final String BUNDLE = "result";
+    static final String STDOUT = "stdout";
+    static final String STDERR = "stderr";
+    static final String EXIT = "exitCode";
+    static final String ERR = "err";
+    static final String ERRMSG = "errmsg";
 
     public PluginResultsService() { super("McpControlResults"); }
 
