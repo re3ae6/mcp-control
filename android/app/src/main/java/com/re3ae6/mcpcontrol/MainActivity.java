@@ -711,3 +711,5 @@ public class MainActivity extends Activity {
         handler.postDelayed(()->{syncPolicyAndStatus();},900);
     }
 }
+
+// CI trigger: connection diagnostic branch is syntactically closed.
