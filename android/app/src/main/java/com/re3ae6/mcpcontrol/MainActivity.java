@@ -20,9 +20,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONArray;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
@@ -46,7 +43,6 @@ public class MainActivity extends Activity {
     private static final int GREEN = 0xff16835b;
     private static final int RED = 0xffc84b4b;
     private static final int YELLOW = 0xffa87308;
-    private static final int BLUE = 0xff3e628e;
 
     private final String[] groups = {"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels = {"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
