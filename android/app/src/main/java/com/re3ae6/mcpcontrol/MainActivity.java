@@ -426,7 +426,30 @@ public class MainActivity extends Activity {
     }
 
     private void clearOutput() {
-        getSharedPreferences("bridge",MODE_PRIVATE).edit().putString("stdout","").putString("stderr","").putInt("exit",-1).apply();
+        getSharedPreferences("bridge",MODE_PRIVATE).edit()
+                .putString("stdout","")
+                .putString("stderr","")
+                .putInt("exit",-1)
+                .apply();
+    }
+
+    private void clearCommandResult(String command) {
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putString("stdout_" + command, "")
+                .putString("stderr_" + command, "")
+                .putInt("exit_" + command, -1)
+                .putInt("error_code_" + command, -1)
+                .putString("error_message_" + command, "")
+                .putLong("received_at_" + command, 0L)
+                .apply();
+    }
+
+    private String commandError(String command) {
+        android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+        String message = bridge.getString("error_message_" + command, "");
+        if (message != null && !message.isEmpty()) return message;
+        int code = bridge.getInt("error_code_" + command, -1);
+        return code > 0 ? "Termux error code " + code : "";
     }
 
     private void refresh() {
@@ -435,11 +458,9 @@ public class MainActivity extends Activity {
         status.setText("●  Connecting…");
         status.setTextColor(YELLOW);
         clearOutput();
-        getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putString("stderr_connect", "")
-                .putString("stdout_connect", "")
-                .putInt("exit_connect", -1)
-                .apply();
+        clearCommandResult("connect");
+        clearCommandResult("status");
+        clearCommandResult("policy");
 
         if (!McpBridge.run(this, "connect")) {
             bridgeFailure("Could not start the Termux bridge. Check Termux permission: Run commands in Termux.");
@@ -452,11 +473,17 @@ public class MainActivity extends Activity {
         long delay = attempt == 0 ? 1200L : 2000L;
         handler.postDelayed(() -> {
             clearOutput();
+            clearCommandResult("status");
             if (!McpBridge.run(this, "status")) {
                 bridgeFailure("Could not query Termux. Check Termux permission: Run commands in Termux.");
                 return;
             }
             handler.postDelayed(() -> {
+                String statusError = commandError("status");
+                if (!statusError.isEmpty()) {
+                    bridgeFailure(statusError);
+                    return;
+                }
                 boolean connected = applyStatusResult();
                 if (connected) {
                     loadPolicyAndFinish();
@@ -464,11 +491,13 @@ public class MainActivity extends Activity {
                 }
                 android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
                 int connectExit = bridge.getInt("exit_connect", -1);
+                int connectErrorCode = bridge.getInt("error_code_connect", -1);
                 long connectAt = bridge.getLong("received_at_connect", 0L);
-                boolean connectFailed = connectExit > 0 && connectAt > 0 &&
+                boolean connectFailed = (connectExit > 0 || connectErrorCode > 0) && connectAt > 0 &&
                         System.currentTimeMillis() - connectAt < 5000L;
                 if (connectFailed || attempt >= 34) {
-                    String err = bridge.getString("stderr_connect", "");
+                    String err = commandError("connect");
+                    if (err.isEmpty()) err = bridge.getString("stderr_connect", "");
                     busy = false;
                     render();
                     if (err != null && !err.isEmpty()) {
@@ -505,11 +534,17 @@ public class MainActivity extends Activity {
 
     private void loadPolicyAndFinish() {
         clearOutput();
+        clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
             bridgeFailure("Connected, but the policy query could not be started.");
             return;
         }
         handler.postDelayed(() -> {
+            String policyError = commandError("policy");
+            if (!policyError.isEmpty()) {
+                bridgeFailure(policyError);
+                return;
+            }
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
             try {
                 JSONObject o = new JSONObject(out);
@@ -531,22 +566,34 @@ public class MainActivity extends Activity {
 
     private void syncPolicyAndStatus() {
         clearOutput();
+        clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
             bridgeFailure("Policy query could not be started.");
             return;
         }
         handler.postDelayed(() -> {
+            String policyError = commandError("policy");
+            if (!policyError.isEmpty()) {
+                bridgeFailure(policyError);
+                return;
+            }
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
             try {
                 JSONObject o = new JSONObject(out);
                 if (o.has("master_lock")) policy = o;
             } catch (Exception ignored) {}
             clearOutput();
+            clearCommandResult("status");
             if (!McpBridge.run(this, "status")) {
                 bridgeFailure("Status query could not be started.");
                 return;
             }
             handler.postDelayed(() -> {
+                String statusError = commandError("status");
+                if (!statusError.isEmpty()) {
+                    bridgeFailure(statusError);
+                    return;
+                }
                 applyStatusResult();
                 busy = false;
                 render();
@@ -560,6 +607,7 @@ public class MainActivity extends Activity {
         status.setText("●  Saving…");
         status.setTextColor(YELLOW);
         clearOutput();
+        clearCommandResult("set");
         if (!McpBridge.run(this,"set",id,n)) {
             bridgeFailure("Could not start the policy change in Termux.");
             return;
@@ -573,6 +621,7 @@ public class MainActivity extends Activity {
         status.setText("●  "+a.substring(0,1).toUpperCase()+a.substring(1)+"…");
         status.setTextColor(YELLOW);
         clearOutput();
+        clearCommandResult(a);
         if (!McpBridge.run(this,a)) {
             bridgeFailure("Could not start the " + a + " action in Termux.");
             return;
@@ -586,6 +635,7 @@ public class MainActivity extends Activity {
         status.setText("●  Locking…");
         status.setTextColor(YELLOW);
         clearOutput();
+        clearCommandResult("lock");
         if (!McpBridge.run(this,"lock")) {
             bridgeFailure("Could not lock the control plane in Termux.");
             return;
@@ -599,6 +649,7 @@ public class MainActivity extends Activity {
         status.setText("●  Unlocking…");
         status.setTextColor(YELLOW);
         clearOutput();
+        clearCommandResult("unlock");
         if (!McpBridge.run(this,"unlock","UNLOCK")) {
             bridgeFailure("Could not unlock the control plane in Termux.");
             return;
