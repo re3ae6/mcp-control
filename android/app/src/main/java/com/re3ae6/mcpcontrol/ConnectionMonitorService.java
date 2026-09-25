@@ -236,13 +236,8 @@ public class ConnectionMonitorService extends Service {
                 checking = false;
                 handler.removeCallbacks(loop);
 
-                // Explicit shutdown: stop automatic recovery, then tear down the
-                // MCP stack once before removing this monitor and notification.
-                prefs.edit()
-                        .putBoolean("monitor_exit_requested", true)
-                        .apply();
-                McpBridge.run(this, "exit");
-
+                // EXIT only closes this control-panel monitor.
+                // It deliberately does not touch MCP, Proxy, Tunnel, or watchdog.
                 stopForeground(true);
                 stopSelf();
                 return START_NOT_STICKY;
