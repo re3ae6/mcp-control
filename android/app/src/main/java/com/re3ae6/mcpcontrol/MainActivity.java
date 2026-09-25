@@ -26,7 +26,8 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler();
     private LinearLayout content, indicatorRow, tabBar;
     private ScrollView scrollView;
-    private TextView status, statusAge;\n    private Button masterLockButton;
+    private TextView status, statusAge;
+    private Button masterLockButton;
     private LinearLayout logHost;
     private JSONObject policy;
     private JSONArray pendingApprovals = new JSONArray();
@@ -49,7 +50,8 @@ public class MainActivity extends Activity {
     private final String[] groups = {"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels = {"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
     private static final int RUN_COMMAND_PERMISSION_REQUEST = 4101;
-    private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;\n    private static final long CONNECTION_FRESH_MS = 20000L;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;
+    private static final long CONNECTION_FRESH_MS = 20000L;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
 
