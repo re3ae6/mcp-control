@@ -33,6 +33,7 @@ class GatewayApprovalE2ETests(unittest.TestCase):
             patch.object(approval, "ROOT", root),
             patch.object(approval, "FILE", self.approval_file),
             patch.object(approval, "AUDIT", self.audit_file),
+            patch.object(approval, "LOCK", root / "approvals.lock"),
         ]
         for p in self.patches:
             p.start()
