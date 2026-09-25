@@ -1,26 +1,82 @@
 #!/data/data/com.termux/files/usr/bin/bash
-set -u
+set +e
+
 REPO="$HOME/mcp-control"
 cd "$REPO" || exit 1
-case "${1:-}" in
-  status) PYTHONPATH="$REPO" python3 -c 'import json; from core.connection import get_connection_status; print(json.dumps(get_connection_status()))' ;;
-  policy) PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy; print(json.dumps(load_policy()))' ;;
-  set)
-    [ -n "${2:-}" ] && [ -n "${3:-}" ] || exit 2
-    case "$3" in deny|ask|allow) ;; *) exit 2 ;; esac
-    PYTHONPATH="$REPO" python3 - "$2" "$3" <<'PY'
+
+TOKEN_ARG="${!#}"
+if [[ "${TOKEN_ARG:-}" == __MCP_CONTROL_TOKEN__=* ]]; then
+  TOKEN="${TOKEN_ARG#__MCP_CONTROL_TOKEN__=}"
+  if [ "$#" -gt 1 ]; then
+    set -- "${@:1:$(($#-1))}"
+  else
+    set --
+  fi
+else
+  TOKEN=""
+fi
+
+COMMAND="${1:-}"
+TMP_DIR=""
+if [ -n "$TOKEN" ]; then
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TMP_DIR"' EXIT
+fi
+
+send_callback() {
+  local stage="$1"
+  local stdout="$2"
+  local stderr="$3"
+  local rc="$4"
+  local error_code="$5"
+  local error_message="$6"
+  [ -z "$TOKEN" ] && return 0
+  /system/bin/am broadcast \
+    -n com.re3ae6.mcpcontrol/.PluginResultsReceiver \
+    -a com.re3ae6.mcpcontrol.RESULT \
+    --es com.re3ae6.mcpcontrol.TOKEN "$TOKEN" \
+    --es com.re3ae6.mcpcontrol.COMMAND "$COMMAND" \
+    --es com.re3ae6.mcpcontrol.STAGE "$stage" \
+    --es com.re3ae6.mcpcontrol.STDOUT "$stdout" \
+    --es com.re3ae6.mcpcontrol.STDERR "$stderr" \
+    --ei com.re3ae6.mcpcontrol.EXIT "$rc" \
+    --ei com.re3ae6.mcpcontrol.ERROR_CODE "$error_code" \
+    --es com.re3ae6.mcpcontrol.ERROR_MESSAGE "$error_message" >/dev/null 2>&1
+}
+
+run_control() {
+  case "${1:-}" in
+    status)
+      PYTHONPATH="$REPO" python3 -c 'import json; from core.connection import get_connection_status; print(json.dumps(get_connection_status()))'
+      ;;
+    policy)
+      PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy; print(json.dumps(load_policy()))'
+      ;;
+    set)
+      [ -n "${2:-}" ] && [ -n "${3:-}" ] || return 2
+      case "$3" in deny|ask|allow) ;; *) return 2 ;; esac
+      PYTHONPATH="$REPO" python3 - "$2" "$3" <<'PY'
 import sys
 from core.trusted_control import set_capability
 set_capability(sys.argv[1], sys.argv[2])
 print('{"ok":true}')
 PY
-    ;;
-  lock) PYTHONPATH="$REPO" python3 -c 'import json; from core.trusted_control import lock; lock(); print(json.dumps({"ok":true,"master_lock":true}))' ;;
-  unlock) [ "${2:-}" = "UNLOCK" ] || exit 2; PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy,save_policy,set_master_lock; from core.trusted_control import _audit; p=load_policy(); set_master_lock(p,False); save_policy(p); _audit("unlock","ALLOW","local_ui_confirmed"); print(json.dumps({"ok":true,"master_lock":false}))' ;;
-  start|connect) exec env MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh" ;;
-  restart) exec env MCP_FORCE_RESTART=1 MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh" ;;
-  audit)
-    PYTHONPATH="$REPO" python3 - <<'PY'
+      ;;
+    lock)
+      PYTHONPATH="$REPO" python3 -c 'import json; from core.trusted_control import lock; lock(); print(json.dumps({"ok":true,"master_lock":true}))'
+      ;;
+    unlock)
+      [ "${2:-}" = "UNLOCK" ] || return 2
+      PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy,save_policy,set_master_lock; from core.trusted_control import _audit; p=load_policy(); set_master_lock(p,False); save_policy(p); _audit("unlock","ALLOW","local_ui_confirmed"); print(json.dumps({"ok":true,"master_lock":false}))'
+      ;;
+    start|connect)
+      env MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
+      ;;
+    restart)
+      env MCP_FORCE_RESTART=1 MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
+      ;;
+    audit)
+      PYTHONPATH="$REPO" python3 - <<'PY'
 import json
 from pathlib import Path
 root=Path.home()/'.config'/'mcp-control'
@@ -29,6 +85,24 @@ for name in ('control_audit.jsonl','audit.jsonl'):
     if p.exists():
         print(json.dumps({"file":name,"lines":p.read_text(encoding="utf-8").splitlines()[-30:]}))
 PY
-    ;;
-  *) exit 2 ;;
-esac
+      ;;
+    *)
+      return 2
+      ;;
+  esac
+}
+
+if [ -n "$TOKEN" ]; then
+  send_callback "started" "" "" -1 0 ""
+  run_control "$@" >"$TMP_DIR/stdout" 2>"$TMP_DIR/stderr"
+  RC=$?
+  STDOUT="$(head -c 8000 "$TMP_DIR/stdout")"
+  STDERR="$(head -c 8000 "$TMP_DIR/stderr")"
+  send_callback "finished" "$STDOUT" "$STDERR" "$RC" 0 ""
+  cat "$TMP_DIR/stdout"
+  cat "$TMP_DIR/stderr" >&2
+  exit "$RC"
+else
+  run_control "$@"
+  exit $?
+fi
