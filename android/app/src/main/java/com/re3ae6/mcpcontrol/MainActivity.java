@@ -652,42 +652,85 @@ public class MainActivity extends Activity {
     }
 
     private void loadPolicyAndFinish(int attempt) {
+        // Do not redispatch policy while an earlier callback may still be in flight.
+        // A late callback from a previous attempt is rejected by the token guard, so
+        // repeated dispatches can accidentally discard the valid result we are waiting for.
         clearOutput();
         clearCommandResult("policy");
+
         if (!McpBridge.run(this, "policy")) {
-            if (attempt < 5) {
-                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 700L);
+            if (attempt < 2) {
+                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 1000L);
             } else {
                 operationFailure("Connected, but the policy query could not be started.");
             }
             return;
         }
+
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_policy", System.currentTimeMillis());
+        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L);
+    }
+
+    private void waitForPolicyResult(long sentAt, long deadline) {
         handler.postDelayed(() -> {
+            android.content.SharedPreferences bridge =
+                    getSharedPreferences("bridge", MODE_PRIVATE);
+
+            String state = bridge.getString("callback_state_policy", "unknown");
+            long receivedAt = bridge.getLong("received_at_policy", 0L);
             String policyError = commandError("policy");
-            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
+            String out = bridge.getString("stdout_policy", "");
             boolean loaded = false;
-            try {
-                JSONObject o = new JSONObject(out);
-                if (o.has("master_lock")) {
-                    policy = o;
-                    loaded = true;
-                }
-            } catch (Exception ignored) {}
-            if (!policyError.isEmpty() || !loaded) {
-                if (attempt < 2) {
-                    handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 450L);
-                } else {
-                    busy = false;
-                    render();
-                    addLogBox(policyError.isEmpty()
-                            ? "Connected, but policy data was not returned."
-                            : policyError);
-                }
+
+            if (receivedAt >= sentAt && "received".equals(state)) {
+                try {
+                    JSONObject o = new JSONObject(out);
+                    if (o.has("master_lock")) {
+                        policy = o;
+                        loaded = true;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (loaded) {
+                busy = false;
+                render();
                 return;
             }
+
+            if (!policyError.isEmpty() && receivedAt >= sentAt) {
+                busy = false;
+                render();
+                addLogBox(policyError);
+                return;
+            }
+
+            if (System.currentTimeMillis() < deadline) {
+                waitForPolicyResult(sentAt, deadline);
+                return;
+            }
+
             busy = false;
             render();
-        }, 650L);
+
+            String stateDetail = bridge.getString("callback_state_policy", "unknown");
+            String stage = bridge.getString("callback_stage_policy", "");
+            int exit = bridge.getInt("exit_policy", -1);
+            int errorCode = bridge.getInt("error_code_policy", -1);
+            String stderr = bridge.getString("stderr_policy", "");
+            String detail = stderr == null ? "" : stderr;
+
+            StringBuilder b = new StringBuilder("Policy callback timeout.\\n")
+                    .append("callback: ").append(stateDetail)
+                    .append(" | stage: ").append(stage.isEmpty() ? "none" : stage)
+                    .append("\\nreceived_at: ").append(receivedAt)
+                    .append(" | sent_at: ").append(sentAt)
+                    .append("\\nexit: ").append(exit)
+                    .append(" | error: ").append(errorCode);
+            if (!detail.isEmpty()) b.append("\\nSTDERR: ").append(detail);
+            addLogBox(b.toString());
+        }, 200L);
     }
 
     private void operationFailure(String message) {
