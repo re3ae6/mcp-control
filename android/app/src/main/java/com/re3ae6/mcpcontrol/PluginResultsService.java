@@ -15,16 +15,24 @@ public class PluginResultsService extends IntentService {
     public PluginResultsService() { super("McpControlResults"); }
 
     @Override protected void onHandleIntent(Intent intent) {
-        if (intent == null) return;
+        long now = System.currentTimeMillis();
+        android.content.SharedPreferences.Editor diagnostic = getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putLong("callback_received_at", now);
+        if (intent == null) {
+            diagnostic.putString("callback_state", "intent_missing").apply();
+            return;
+        }
         Bundle b = intent.getBundleExtra(BUNDLE);
-        if (b == null) return;
+        if (b == null) {
+            diagnostic.putString("callback_state", "bundle_missing").apply();
+            return;
+        }
 
         String stdout = b.getString(STDOUT, "");
         String stderr = b.getString(STDERR, "");
         int exit = b.getInt(EXIT, -1);
         int errorCode = b.getInt(ERR, -1);
         String errorMessage = b.getString(ERRMSG, "");
-        long now = System.currentTimeMillis();
         String command = intent.getStringExtra("mcp_control_command");
 
         android.content.SharedPreferences.Editor e = getSharedPreferences("bridge", MODE_PRIVATE).edit()
@@ -37,7 +45,9 @@ public class PluginResultsService extends IntentService {
                 .putLong("received_at", now);
 
         if (command != null && !command.isEmpty()) {
-            e.putString("stdout_" + command, stdout)
+            e.putString("callback_state_" + command, "received")
+             .putLong("callback_received_at_" + command, now)
+             .putString("stdout_" + command, stdout)
              .putString("stderr_" + command, stderr)
              .putInt("exit_" + command, exit)
              .putInt("error_code_" + command, errorCode)
