@@ -231,7 +231,7 @@ public class MainActivity extends Activity {
         lockBanner = h;
     }
 
-    private TextView metric(String name, String value, int color) {
+    private View metric(String name, String value, int color) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER_VERTICAL);
@@ -243,22 +243,20 @@ public class MainActivity extends Activity {
         TextView v = text(value, 22, color);
         v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         box.addView(v);
-        TextView out = text("", 1, Color.TRANSPARENT);
-        out.setTag(box);
-        return out;
+        return box;
     }
 
     private void addStatusCard(boolean m, boolean p, boolean t) {
         addCard("Connection", "Local services");
         LinearLayout row = new LinearLayout(this);
         row.setPadding(0, dp(4), 0, 0);
-        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED).getTag(), new LinearLayout.LayoutParams(0, dp(76), 1));
+        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED), new LinearLayout.LayoutParams(0, dp(76), 1));
         LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(76), 1);
         q.setMargins(dp(7), 0, 0, 0);
-        row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED).getTag(), q);
+        row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED), q);
         q = new LinearLayout.LayoutParams(0, dp(76), 1);
         q.setMargins(dp(7), 0, 0, 0);
-        row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED).getTag(), q);
+        row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
         content.addView(row);
     }
 
@@ -294,13 +292,13 @@ public class MainActivity extends Activity {
             addCard("Policy", "Effective capability states");
             LinearLayout counts = new LinearLayout(this);
             int[] c = countStates();
-            counts.addView(metric("DENY", String.valueOf(c[0]), RED).getTag(), new LinearLayout.LayoutParams(0, dp(76), 1));
+            counts.addView(metric("DENY", String.valueOf(c[0]), RED), new LinearLayout.LayoutParams(0, dp(76), 1));
             LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(76), 1);
             q.setMargins(dp(7), 0, 0, 0);
-            counts.addView(metric("ASK", String.valueOf(c[1]), YELLOW).getTag(), q);
+            counts.addView(metric("ASK", String.valueOf(c[1]), YELLOW), q);
             q = new LinearLayout.LayoutParams(0, dp(76), 1);
             q.setMargins(dp(7), 0, 0, 0);
-            counts.addView(metric("ALLOW", String.valueOf(c[2]), GREEN).getTag(), q);
+            counts.addView(metric("ALLOW", String.valueOf(c[2]), GREEN), q);
             content.addView(counts);
 
             addCard("Actions", "Service control");
