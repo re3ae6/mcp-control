@@ -40,7 +40,7 @@ public class ConnectionMonitorService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
-        Notification notification = buildNotification("Monitoring MCP connection");
+        Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -115,7 +115,7 @@ public class ConnectionMonitorService extends Service {
         }
     }
 
-    private Notification buildNotification(String text) {
+    private Notification buildNotification() {
         if (Build.VERSION.SDK_INT >= 26) createChannel();
 
         Intent open = new Intent(this, MainActivity.class);
@@ -162,7 +162,7 @@ public class ConnectionMonitorService extends Service {
 
     private void updateNotification() {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification(""));
+        if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification());
     }
 
     private void createChannel() {
