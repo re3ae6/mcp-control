@@ -87,6 +87,13 @@ def _request_path(params):
         raw = "."
     return Path(raw).expanduser().resolve()
 
+def _file_decisions(name, params):
+    """Return both the tool capability and the resolved filesystem scope."""
+    capability = _FILE_TOOLS.get(name)
+    if not capability:
+        return []
+    return [capability, _file_scope(params)]
+
 def _file_scope(params):
     path = _request_path(params)
     home = Path.home()
