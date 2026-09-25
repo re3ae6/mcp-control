@@ -58,3 +58,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 # Rebuild trigger: validate the current Android UI/monitor sources.
+# Fresh APK requested after security mapping test fix.
