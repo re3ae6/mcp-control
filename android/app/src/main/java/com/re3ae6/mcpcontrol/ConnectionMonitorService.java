@@ -89,22 +89,51 @@ public class ConnectionMonitorService extends Service {
     }
 
     private void applyStatusJson(JSONObject result, boolean notify) {
+        if (result == null) return;
+        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
+        long incomingAt = prefs.getLong("received_at_status", 0L);
+        if (incomingAt <= 0L) incomingAt = System.currentTimeMillis();
+
+        long currentAt = prefs.getLong("monitor_received_at", 0L);
+        // One connection snapshot is authoritative. Never let an older/late
+        // callback replace a newer state already shown by Activity or Monitor.
+        if (currentAt > incomingAt) {
+            restoreNotificationState(prefs);
+            if (notify) updateNotification();
+            return;
+        }
+
         mcpReady = isMcpReady(result);
         proxyReady = isProxyReady(result);
         tunnelReady = isTunnelReady(result);
         boolean connected = mcpReady && proxyReady && tunnelReady;
-        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+        prefs.edit()
                 .putBoolean("monitor_connected", connected)
-                .putLong("monitor_received_at", System.currentTimeMillis())
+                .putLong("monitor_received_at", incomingAt)
                 .putString("monitor_status_json", result.toString())
-                .putString("monitor_state", "ok")
+                .putString("monitor_state", "connection_snapshot")
                 .putString("monitor_last_event",
-                        "MCP " + (mcpReady ? "OK" : "DOWN")
+                        "Connection state: MCP " + (mcpReady ? "OK" : "DOWN")
                                 + " / Proxy " + (proxyReady ? "OK" : "DOWN")
                                 + " / Tunnel " + (tunnelReady ? "LIVE" : "DOWN"))
                 .putLong("monitor_last_event_at", System.currentTimeMillis())
                 .apply();
         if (notify) updateNotification();
+    }
+
+    private void restoreNotificationState(android.content.SharedPreferences prefs) {
+        mcpReady = prefs.getBoolean("monitor_mcp", mcpReady);
+        proxyReady = prefs.getBoolean("monitor_proxy", proxyReady);
+        tunnelReady = prefs.getBoolean("monitor_tunnel", tunnelReady);
+        String json = prefs.getString("monitor_status_json", "");
+        try {
+            if (!json.isEmpty()) {
+                JSONObject o = new JSONObject(json);
+                mcpReady = isMcpReady(o);
+                proxyReady = isProxyReady(o);
+                tunnelReady = isTunnelReady(o);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void recordMonitorEvent(String event) {
