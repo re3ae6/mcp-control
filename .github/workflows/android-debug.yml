@@ -40,6 +40,9 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Security regression tests
+        run: python -m unittest discover -s ../tests -p 'test_*.py'
+
       - name: Clean build
         run: gradle --no-daemon clean
 
