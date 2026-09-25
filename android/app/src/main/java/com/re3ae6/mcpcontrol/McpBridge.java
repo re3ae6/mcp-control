@@ -14,17 +14,17 @@ public final class McpBridge {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
-                "/data/data/com.termux/files/usr/bin/bash");
+                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh");
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
+        i.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
 
         String command = args.length == 0 ? "" : args[0];
         String token = UUID.randomUUID().toString();
-        String[] bridgeArgs = new String[args.length + 2];
-        bridgeArgs[0] = "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh";
-        System.arraycopy(args, 0, bridgeArgs, 1, args.length);
-        bridgeArgs[args.length + 1] = "__MCP_CONTROL_TOKEN__=" + token;
+        String[] bridgeArgs = new String[args.length + 1];
+        System.arraycopy(args, 0, bridgeArgs, 0, args.length);
+        bridgeArgs[args.length] = "__MCP_CONTROL_TOKEN__=" + token;
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
 
         Intent result = new Intent(context, PluginResultsReceiver.class);
@@ -45,7 +45,11 @@ public final class McpBridge {
                 .putString("callback_token_" + command, token)
                 .apply();
         try {
-            context.startService(i);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(i);
+            } else {
+                context.startService(i);
+            }
             context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
                     .putString("last_error", "")
                     .putLong("last_error_at", 0L)
