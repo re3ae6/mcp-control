@@ -35,6 +35,8 @@ public class ConnectionMonitorService extends Service {
 
     private static final int GREEN = 0xFF4CAF50;
     private static final int RED = 0xFFF44336;
+    private static final int YELLOW = 0xFFFFB300;
+    private static final long FRESH_MS = 20000L;
 
     private final Runnable loop = new Runnable() {
         @Override public void run() {
@@ -148,8 +150,6 @@ public class ConnectionMonitorService extends Service {
         android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
         if (!prefs.getBoolean("monitor_enabled", true) ||
                 prefs.getBoolean("emergency_killed", false)) return;
-        if (prefs.getBoolean("activity_visible", false)) return;
-
         String state = prefs.getString("callback_state_status", "");
         long sentAt = prefs.getLong("sent_at_status", 0L);
         if ("pending".equals(state) && System.currentTimeMillis() - sentAt < 8000L) return;
@@ -241,9 +241,14 @@ public class ConnectionMonitorService extends Service {
     }
 
     private void setMonitorLightColors(RemoteViews views) {
-        views.setTextColor(R.id.notification_mcp_light, mcpReady ? GREEN : RED);
-        views.setTextColor(R.id.notification_proxy_light, proxyReady ? GREEN : RED);
-        views.setTextColor(R.id.notification_tunnel_light, tunnelReady ? GREEN : RED);
+        boolean fresh = lastAcceptedAt > 0L &&
+                System.currentTimeMillis() - lastAcceptedAt <= FRESH_MS;
+        int mcpColor = fresh ? (mcpReady ? GREEN : RED) : YELLOW;
+        int proxyColor = fresh ? (proxyReady ? GREEN : RED) : YELLOW;
+        int tunnelColor = fresh ? (tunnelReady ? GREEN : RED) : YELLOW;
+        views.setTextColor(R.id.notification_mcp_light, mcpColor);
+        views.setTextColor(R.id.notification_proxy_light, proxyColor);
+        views.setTextColor(R.id.notification_tunnel_light, tunnelColor);
     }
 
     private void setMonitorViews(RemoteViews views, String mcpLight, String proxyLight,
