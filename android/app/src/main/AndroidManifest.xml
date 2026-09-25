@@ -16,6 +16,6 @@
             </intent-filter>
         </activity>
         <service android:name=".PluginResultsService" android:exported="false" />
-        <receiver android:name=".PluginResultsReceiver" android:exported="false" />
+        <activity android:name=".PluginResultsActivity" android:exported="false" />
     </application>
 </manifest>
