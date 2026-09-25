@@ -597,7 +597,6 @@ public class MainActivity extends Activity {
     }
 
     private void addLogBox(String message) {
-        addCard("Log", "Connection / bridge output  •  long-press to copy");
         TextView log = text(message == null || message.isEmpty() ? "No details." : message, 12, TEXT);
         log.setTextIsSelectable(true);
         log.setGravity(Gravity.TOP | Gravity.START);
