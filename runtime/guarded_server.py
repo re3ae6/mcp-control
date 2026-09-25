@@ -9,112 +9,21 @@ sys.path.insert(0, str(ROOT))
 
 from core.enforcer import check, record, request_approval, consume_approval
 from core.command_guard import authorize_command
+from core.capability_map import capability_for_tool, secondary_for_tool, git_capability_for_command, file_capabilities_for_path
 from termux_mcp import mcp_core, mcp_server
 
 
-def _capability(name: str) -> str:
-    exact = {
-        "ls": "files.list",
-        "read": "files.read",
-        "search": "files.search",
-        "context": "files.context",
-        "history": "files.history",
-        "changes_list": "files.changes",
-        "write": "files.write",
-        "mkdir": "files.mkdir",
-        "run": "terminal.run",
-        "cancel": "terminal.cancel",
-        "session_start": "terminal.background",
-        "session_run": "terminal.run",
-        "session_poll": "terminal.poll",
-        "session_list": "terminal.list",
-        "session_kill": "terminal.kill",
-        "terminal_open": "terminal.run",
-        "terminal_run": "terminal.run",
-        "terminal_send": "terminal.run",
-        "terminal_read": "terminal.read",
-        "terminal_list": "terminal.list",
-        "terminal_close": "terminal.cancel",
-        "location": "device.location",
-        "camera_photo": "device.camera",
-        "screenshot": "device.camera",
-        "image_process": "device.camera",
-        "text_extract": "device.camera",
-        "sms_send": "device.sms",
-        "sms_inbox": "device.sms",
-        "clipboard_get": "device.clipboard",
-        "clipboard_set": "device.clipboard",
-        "notify": "device.notifications",
-        "toast": "device.notifications",
-        "tts_speak": "device.tts",
-        "share": "device.share",
-        "open_url": "network.internet",
-        "download": "network.internet",
-        "public_ip": "network.internet",
-        "weather": "network.internet",
-        "speedtest": "network.internet",
-        "qrcode": "network.internet",
-        "cloud_sync": "network.internet",
-        "delete": "dangerous.delete",
-        "process_kill": "dangerous.kill",
-        "smart_install": "dangerous.install",
-        "system_info": "terminal.process",
-        "health": "terminal.process",
-        "process_list": "terminal.process",
-        "cron_list": "terminal.process",
-        "cron_add": "terminal.background",
-        "cron_remove": "dangerous.kill",
-        "git_pr": "git.diff",
-        "diff": "git.diff",
-    }
-    return exact.get(name, "dangerous.outside_allowlist")
-
-
-_FILE_TOOLS = {
-    "ls": "files.list",
-    "read": "files.read",
-    "search": "files.search",
-    "context": "files.context",
-    "history": "files.history",
-    "changes_list": "files.changes",
-    "write": "files.write",
-    "mkdir": "files.mkdir",
-}
-
 def _request_path(params):
     raw = params.get("path", ".") if isinstance(params, dict) else "."
-    if not isinstance(raw, str) or not raw.strip():
-        raw = "."
-    return Path(raw).expanduser().resolve()
+    return Path(raw).expanduser().resolve() if isinstance(raw, str) and raw.strip() else Path(".").resolve()
 
 def _file_decisions(name, params):
-    """Return both the tool capability and the resolved filesystem scope."""
-    capability = _FILE_TOOLS.get(name)
-    if not capability:
-        return []
-    return [capability, _file_scope(params)]
+    return file_capabilities_for_path(name, _request_path(params))
 
-def _file_scope(params):
-    path = _request_path(params)
-    home = Path.home()
-    scoped = ((home / "po_recorder" / "data", "files.repo_data"), (home / "po_recorder" / "tools", "files.repo_tools"), (home / "po_recorder" / "reports", "files.repo_reports"), (home / "po_recorder" / "tmp", "files.repo_tmp"), (home / "tunnel-client-install", "files.tunnel_install"), (Path("/sdcard"), "files.shared_storage"))
-    for root, capability in scoped:
-        root = root.resolve()
-        if path == root or root in path.parents:
-            return capability
-    roots = ((home / "po_recorder", "files.repo"), (home / "mcp-control", "files.control"), (home, "files.home"))
-    for root, capability in roots:
-        root = root.resolve()
-        if path == root or root in path.parents:
-            return capability
-    return "dangerous.outside_allowlist"
-
-# Preserve the real MCP implementation before installing the policy wrapper.
 _original = mcp_core.call_tool
 
 def guarded_call(session, name, params, on_progress=None):
-    cap = _capability(name)
-    decisions = [cap]
+    decisions = [capability_for_tool(name)]
     # decisions already built above
     if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", "")).strip()
@@ -125,8 +34,9 @@ def guarded_call(session, name, params, on_progress=None):
         elif command.startswith("git commit"): decisions.append("git.commit")
         elif command.startswith("git push"): decisions.append("git.push")
         elif command.startswith("git switch") or command.startswith("git checkout") or command.startswith("git branch"): decisions.append("git.branch")
-    extra = {"run":"mcp.execute", "terminal_run":"mcp.execute", "terminal_send":"mcp.execute", "session_run":"mcp.execute", "session_start":"mcp.long_running", "session_poll":"mcp.read_output", "terminal_read":"mcp.read_output", "session_list":"mcp.process", "terminal_list":"mcp.process", "session_kill":"mcp.process", "terminal_close":"mcp.long_running", "write":"mcp.modify", "mkdir":"mcp.create", "delete":"mcp.delete"}.get(name)
-    if extra and extra not in decisions: decisions.append(extra)
+    for extra in secondary_for_tool(name):
+        if extra not in decisions: decisions.append(extra)
+
     if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", ""))
         ok, reason = authorize_command(command)
@@ -136,8 +46,7 @@ def guarded_call(session, name, params, on_progress=None):
 
     # decisions already built above
     for required_cap in _file_decisions(name, params):
-        if required_cap not in decisions:
-            decisions.append(required_cap)
+        if required_cap not in decisions: decisions.append(required_cap)
 
     for required_cap in decisions:
         d = check(required_cap)
