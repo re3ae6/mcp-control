@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -22,6 +23,9 @@ public class ConnectionMonitorService extends Service {
     private final Handler handler = new Handler();
     private PowerManager.WakeLock wakeLock;
     private boolean checking = false;
+    private boolean mcpReady = false;
+    private boolean proxyReady = false;
+    private boolean tunnelReady = false;
 
     private final Runnable loop = new Runnable() {
         @Override public void run() {
@@ -86,12 +90,20 @@ public class ConnectionMonitorService extends Service {
                     JSONObject result = new JSONObject(out);
                     if (result.has("connected")) {
                         boolean connected = result.optBoolean("connected");
+                        mcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
+                                || result.optBoolean("mcp_ok", false);
+                        proxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
+                                || result.optBoolean("proxy_ok", false);
+                        String tunnel = result.optString("tunnel", "").toLowerCase();
+                        tunnelReady = tunnel.contains("live") || tunnel.contains("ready")
+                                || result.optBoolean("tunnel_ok", false);
                         prefs.edit()
                                 .putBoolean("monitor_connected", connected)
                                 .putLong("monitor_received_at", receivedAt)
                                 .putString("monitor_status_json", result.toString())
                                 .putString("monitor_state", "ok")
                                 .apply();
+                        updateNotification();
                     }
                 } catch (Exception ignored) {}
             }
@@ -101,16 +113,42 @@ public class ConnectionMonitorService extends Service {
     }
 
     private Notification buildNotification(String text) {
-        if (Build.VERSION.SDK_INT >= 26) {
-            createChannel();
-        }
+        if (Build.VERSION.SDK_INT >= 26) createChannel();
+
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this, 4202, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent exit = new Intent(this, ConnectionMonitorService.class)
+                .setAction("com.re3ae6.mcpcontrol.EXIT");
+        PendingIntent exitIntent = PendingIntent.getService(
+                this, 4203, exit,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        String ready = "● READY";
+        String notReady = "○ NOT READY";
+        String body = "MCP " + (mcpReady ? ready : notReady)
+                + "   •   Proxy " + (proxyReady ? ready : notReady)
+                + "   •   Tunnel " + (tunnelReady ? ready : notReady);
+
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
-                .setContentText(text)
+                .setContentText(body)
+                .setStyle(new Notification.BigTextStyle().bigText(body))
                 .setSmallIcon(android.R.drawable.ic_popup_sync)
+                .setContentIntent(contentIntent)
                 .setOngoing(true)
+                .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
+                .addAction(new Notification.Action.Builder(
+                        null, "EXIT", exitIntent).build())
                 .build();
+    }
+
+    private void updateNotification() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification(""));
     }
 
     private void createChannel() {
@@ -126,6 +164,11 @@ public class ConnectionMonitorService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && "com.re3ae6.mcpcontrol.EXIT".equals(intent.getAction())) {
+            stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
     }
 
