@@ -13,12 +13,43 @@ POLICY_FILE = POLICY_DIR / "policy.json"
 VALID = {"deny", "ask", "allow"}
 
 
+def _validate_policy(data: dict[str, Any]) -> None:
+    if not isinstance(data, dict) or data.get("version") != 1:
+        raise ValueError("policy_invalid")
+    if not isinstance(data.get("master_lock"), bool):
+        raise ValueError("master_lock_invalid")
+    capabilities = data.get("capabilities")
+    if not isinstance(capabilities, dict):
+        raise ValueError("capabilities_invalid")
+    seen = set()
+    for group, items in capabilities.items():
+        if not isinstance(group, str) or not isinstance(items, list):
+            raise ValueError("capability_group_invalid")
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                raise ValueError("capability_entry_invalid")
+            capability_id = item["id"]
+            if capability_id in seen:
+                raise ValueError(f"duplicate_capability:{capability_id}")
+            seen.add(capability_id)
+            if item.get("state", "deny") not in VALID:
+                raise ValueError(f"capability_state_invalid:{capability_id}")
+
+
 def load_policy() -> dict[str, Any]:
     POLICY_DIR.mkdir(parents=True, exist_ok=True)
     if not POLICY_FILE.exists():
         POLICY_FILE.write_text(DEFAULT.read_text(), encoding="utf-8")
         os.chmod(POLICY_FILE, 0o600)
-    return json.loads(POLICY_FILE.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
+        _validate_policy(data)
+        return data
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        data = json.loads(DEFAULT.read_text(encoding="utf-8"))
+        _validate_policy(data)
+        save_policy(data)
+        return data
 
 
 def save_policy(policy: dict[str, Any]) -> None:
