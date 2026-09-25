@@ -74,6 +74,28 @@ class SecurityMatrixTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             trusted_control.set_capability("does.not.exist", "allow")
 
+    def test_malformed_policy_fails_closed_to_canonical_default(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["capabilities"]["terminal"][0]["state"] = "allow"
+        policy.save_policy(p)
+        self.policy_file.write_text(json.dumps({
+            "version": 1, "master_lock": "false", "capabilities": p["capabilities"]
+        }), encoding="utf-8")
+        recovered = policy.load_policy()
+        self.assertTrue(recovered["master_lock"])
+        self.assertEqual(policy.decision(recovered, "terminal.bash"), "deny")
+
+    def test_duplicate_capability_ids_fail_closed(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        first = p["capabilities"]["terminal"][0]
+        p["capabilities"]["terminal"].append(dict(first))
+        policy.save_policy(p)
+        recovered = policy.load_policy()
+        self.assertTrue(recovered["master_lock"])
+        self.assertEqual(policy.decision(recovered, first["id"]), "deny")
+
     def test_master_lock_blocks_capability_mutation(self):
         with self.assertRaisesRegex(PermissionError, "master_lock_active"):
             trusted_control.set_capability("terminal.bash", "allow")
