@@ -324,6 +324,13 @@ public class MainActivity extends Activity {
         if ("overview".equals(group)) {
             addCard("System Overview", "Secure local controller");
             addMasterBanner(locked);
+            if (connectionOk && lastConnectionStatus != null) {
+                addBridgeConnectionCard(
+                        "OK".equalsIgnoreCase(lastConnectionStatus.optString("mcp")),
+                        "OK".equalsIgnoreCase(lastConnectionStatus.optString("proxy")),
+                        lastConnectionStatus.optString("tunnel", "").toLowerCase().contains("live")
+                                || lastConnectionStatus.optString("tunnel", "").toLowerCase().contains("ready"));
+            }
 
             addCard("Policy", "Effective capability states");
             LinearLayout counts = new LinearLayout(this);
@@ -353,6 +360,12 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(46));
             ap.setMargins(0, dp(7), 0, 0);
             content.addView(approvals, ap);
+
+            Button log = button("View recent audit log", v -> loadAudit());
+            log.setBackground(bg(CARD, BORDER, 24));
+            LinearLayout.LayoutParams lg = new LinearLayout.LayoutParams(-1, dp(46));
+            lg.setMargins(0, dp(7), 0, 0);
+            content.addView(log, lg);
             return;
         }
 
@@ -613,23 +626,43 @@ public class MainActivity extends Activity {
     }
 
     private void loadPolicyAndFinish() {
+        loadPolicyAndFinish(0);
+    }
+
+    private void loadPolicyAndFinish(int attempt) {
         clearOutput();
         clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
-            operationFailure("Connected, but the policy query could not be started.");
+            if (attempt < 2) {
+                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 500L);
+            } else {
+                operationFailure("Connected, but the policy query could not be started.");
+            }
             return;
         }
         handler.postDelayed(() -> {
             String policyError = commandError("policy");
-            if (!policyError.isEmpty()) {
-                operationFailure(policyError);
-                return;
-            }
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
+            boolean loaded = false;
             try {
                 JSONObject o = new JSONObject(out);
-                if (o.has("master_lock")) policy = o;
+                if (o.has("master_lock")) {
+                    policy = o;
+                    loaded = true;
+                }
             } catch (Exception ignored) {}
+            if (!policyError.isEmpty() || !loaded) {
+                if (attempt < 2) {
+                    handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 450L);
+                } else {
+                    busy = false;
+                    render();
+                    addLogBox(policyError.isEmpty()
+                            ? "Connected, but policy data was not returned."
+                            : policyError);
+                }
+                return;
+            }
             busy = false;
             render();
         }, 650L);
@@ -767,6 +800,44 @@ public class MainActivity extends Activity {
             bp.setMargins(0, dp(8), 0, 0);
             row.addView(approve, bp);
         }
+    }
+
+    private void loadAudit() {
+        if (busy) return;
+        busy = true;
+        status.setText("●  Loading log…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("audit");
+        if (!McpBridge.run(this, "audit")) {
+            operationFailure("Could not query the audit log.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("audit");
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_audit", "");
+            busy = false;
+            render();
+            if (!error.isEmpty()) {
+                addLogBox(error);
+                return;
+            }
+            try {
+                JSONObject o = new JSONObject(out);
+                JSONArray lines = o.optJSONArray("lines");
+                if (lines == null || lines.length() == 0) {
+                    addLogBox("No audit entries found.");
+                    return;
+                }
+                StringBuilder b = new StringBuilder("Recent audit entries:\n");
+                for (int i = 0; i < lines.length(); i++) {
+                    b.append(lines.optString(i)).append('\n');
+                }
+                addLogBox(b.toString().trim());
+            } catch (Exception e) {
+                addLogBox(out.isEmpty() ? "No audit entries found." : out);
+            }
+        }, 650L);
     }
 
     private void runApproval(String id) {
