@@ -11,6 +11,24 @@ public final class McpBridge {
     private McpBridge() {}
 
     public static boolean run(Context context, String... args) {
+        String command = args.length == 0 ? "" : args[0];
+        android.content.SharedPreferences prefs =
+                context.getSharedPreferences("bridge", Context.MODE_PRIVATE);
+        boolean emergencyLocked = prefs.getBoolean("emergency_locked", false);
+        boolean emergencyKilled = prefs.getBoolean("emergency_killed", false);
+        boolean readOnly = "status".equals(command) || "policy".equals(command);
+        boolean unlock = "unlock".equals(command);
+
+        // Emergency controls are local and fail closed. Read-only status/policy
+        // remain available for visibility; only an explicit Unlock can clear the stop.
+        if ((emergencyLocked || emergencyKilled) && !readOnly && !unlock) {
+            prefs.edit()
+                    .putString("last_error", "Emergency lock active: command denied.")
+                    .putLong("last_error_at", System.currentTimeMillis())
+                    .apply();
+            return false;
+        }
+
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
@@ -20,7 +38,6 @@ public final class McpBridge {
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
         i.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0");
 
-        String command = args.length == 0 ? "" : args[0];
         String token = UUID.randomUUID().toString();
         String[] bridgeArgs = new String[args.length + 1];
         System.arraycopy(args, 0, bridgeArgs, 0, args.length);
