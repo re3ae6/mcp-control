@@ -1,7 +1,7 @@
 # MCP Control — MASTER
 
 ## 1. Mission
-Local Android/Termux MCP permission gateway.
+Local Android/Termux MCP permission control.
 Default security posture: DENY.
 Normal MCP execution remains blocked while MASTER LOCK is enabled.
 
@@ -20,7 +20,7 @@ Normal MCP execution remains blocked while MASTER LOCK is enabled.
 
 Local Control UI
     -> Policy Manager
-    -> Permission Gateway / Enforcer
+    -> Enforcer
     -> Approval Engine
     -> Command + Path Guard
     -> Audit
@@ -45,7 +45,7 @@ Rules:
 - consumed approval cannot be replayed.
 - MASTER LOCK blocks both approval creation and consumption through policy enforcement.
 
-## 5. Gateway
+## 5. MCP Enforcement Boundary
 `runtime/guarded_server.py` is the normal MCP enforcement boundary.
 
 Flow:
@@ -157,7 +157,7 @@ Verified:
 - Mismatch rejection passes.
 - One-shot consume passes.
 - Replay rejection passes.
-- Gateway ASK -> approval -> execution passes.
+- MCP enforcement boundary ASK -> approval -> execution passes.
 - Gateway mismatch rejection passes.
 - Gateway replay rejection passes.
 - Gateway MASTER LOCK rejection passes.
