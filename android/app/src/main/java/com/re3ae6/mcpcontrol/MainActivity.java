@@ -36,6 +36,14 @@ public class MainActivity extends Activity {
     private boolean connectionOk = false;
     private JSONObject lastConnectionStatus;
     private long connectionSnapshotAt = 0L;
+    private final Runnable uiMonitorTicker = new Runnable() {
+        @Override public void run() {
+            if (!isFinishing() && !isDestroyed()) {
+                applyMonitorSnapshot();
+                handler.postDelayed(this, 1000L);
+            }
+        }
+    };
 
     private static final int BG = 0xfff7f6f2;
     private static final int CARD = 0xffffffff;
@@ -157,12 +165,14 @@ public class MainActivity extends Activity {
         applyMonitorSnapshot();
         loadCachedPolicy();
         render();
+        handler.removeCallbacks(uiMonitorTicker);
+        handler.post(uiMonitorTicker);
     }
 
     @Override protected void onPause() {
+        handler.removeCallbacks(uiMonitorTicker);
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putBoolean("activity_visible", false)
-                .apply();
+                .putBoolean("activity_visible", false).apply();
         super.onPause();
     }
 
@@ -475,9 +485,27 @@ public class MainActivity extends Activity {
         if ("overview".equals(group)) {
             addConnectionSummary();
 
-            addSectionHeader("Policy", locked ? "MASTER LOCK • effective DENY" : "individual states active");
-            int[] c = countStates();
+            LinearLayout policyBox = new LinearLayout(this);
+            policyBox.setOrientation(LinearLayout.VERTICAL);
+            policyBox.setPadding(dp(10), dp(8), dp(10), dp(9));
+            policyBox.setBackground(bg(CARD, BORDER, 13));
+            LinearLayout.LayoutParams pb = new LinearLayout.LayoutParams(-1, -2);
+            pb.setMargins(0, dp(5), 0, 0);
+            content.addView(policyBox, pb);
+
+            LinearLayout policyTitle = new LinearLayout(this);
+            policyTitle.setGravity(Gravity.CENTER_VERTICAL);
+            TextView ph = text("Policy", 13, TEXT);
+            ph.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            policyTitle.addView(ph, new LinearLayout.LayoutParams(0, dp(23), 1));
+            TextView ps = text(locked ? "MASTER LOCK • DENY" : "individual states", 9,
+                    locked ? RED : MUTED);
+            ps.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            policyTitle.addView(ps, new LinearLayout.LayoutParams(dp(130), dp(23)));
+            policyBox.addView(policyTitle);
+
             LinearLayout counts = new LinearLayout(this);
+            int[] c = countStates();
             counts.addView(metric("DENY", String.valueOf(c[0]), RED),
                     new LinearLayout.LayoutParams(0, dp(44), 1));
             LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(44), 1);
@@ -486,28 +514,32 @@ public class MainActivity extends Activity {
             q = new LinearLayout.LayoutParams(0, dp(44), 1);
             q.setMargins(dp(5), 0, 0, 0);
             counts.addView(metric("ALLOW", String.valueOf(c[2]), GREEN), q);
-            content.addView(counts);
+            policyBox.addView(counts);
 
-            addSectionHeader("Controls", "service");
-            LinearLayout controls = new LinearLayout(this);
+            LinearLayout controlBox = new LinearLayout(this);
+            controlBox.setGravity(Gravity.CENTER_VERTICAL);
+            controlBox.setPadding(dp(10), dp(7), dp(10), dp(7));
+            controlBox.setBackground(bg(CARD, BORDER, 13));
+            LinearLayout.LayoutParams cb = new LinearLayout.LayoutParams(-1, dp(52));
+            cb.setMargins(0, dp(5), 0, 0);
 
-            Button restart = button("Restart MCP", v -> runAction("restart", 1900));
-            restart.setBackground(bg(CARD, BORDER, 17));
-            controls.addView(restart, new LinearLayout.LayoutParams(0, dp(38), 1));
+            Button restart = button("Restart", v -> runAction("restart", 1900));
+            restart.setBackground(bg(CARD_SOFT, BORDER, 17));
+            controlBox.addView(restart, new LinearLayout.LayoutParams(0, dp(38), 1));
 
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, dp(38), 1);
             cp.setMargins(dp(5), 0, 0, 0);
             Button approvals = button("Approvals", v -> loadApprovals());
-            approvals.setBackground(bg(CARD, BORDER, 17));
-            controls.addView(approvals, cp);
+            approvals.setBackground(bg(CARD_SOFT, BORDER, 17));
+            controlBox.addView(approvals, cp);
 
             cp = new LinearLayout.LayoutParams(0, dp(38), 1);
             cp.setMargins(dp(5), 0, 0, 0);
             Button audit = button("Audit", v -> loadAudit());
-            audit.setBackground(bg(CARD, BORDER, 17));
-            controls.addView(audit, cp);
+            audit.setBackground(bg(CARD_SOFT, BORDER, 17));
+            controlBox.addView(audit, cp);
+            content.addView(controlBox, cb);
 
-            content.addView(controls);
             addMonitorDiagnosticsCard();
             if (pendingApprovals.length() > 0) addPendingApprovalsCard();
             return;
@@ -639,7 +671,6 @@ public class MainActivity extends Activity {
     }
 
     private void addMonitorDiagnosticsCard() {
-        addSectionHeader("Diagnostics", "Latest bridge/monitor state");
         android.content.SharedPreferences p = getSharedPreferences("bridge", MODE_PRIVATE);
         String event = p.getString("monitor_last_event", "No monitor event yet.");
         long at = p.getLong("monitor_last_event_at", 0L);
@@ -649,23 +680,28 @@ public class MainActivity extends Activity {
         long received = p.getLong("received_at_status", 0L);
         String err = commandError("status");
 
-        StringBuilder d = new StringBuilder()
-                .append(event)
-                .append("\\ncallback: ").append(callback)
-                .append(stage.isEmpty() ? "" : " / " + stage)
-                .append("\\nsent: ").append(sent)
-                .append("  received: ").append(received);
-        if (at > 0L) d.append("\\nevent_at: ").append(at);
-        if (!err.isEmpty()) d.append("\\nerror: ").append(err);
-
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(14), dp(12), dp(14), dp(12));
-        box.setBackground(bg(CARD_SOFT, BORDER, 16));
-        TextView t = text(d.toString(), 10, TEXT);
-        t.setGravity(Gravity.TOP | Gravity.START);
-        t.setTextIsSelectable(true);
-        box.addView(t);
+        box.setPadding(dp(10), dp(7), dp(10), dp(8));
+        box.setBackground(bg(CARD, BORDER, 13));
+
+        LinearLayout title = new LinearLayout(this);
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        TextView h = text("Diagnostics", 13, TEXT);
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.addView(h, new LinearLayout.LayoutParams(0, dp(23), 1));
+        TextView tap = text("details", 9, MUTED);
+        tap.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        title.addView(tap, new LinearLayout.LayoutParams(dp(55), dp(23)));
+        box.addView(title);
+
+        String summary = event + (at > 0 ? " • " + formatAge(System.currentTimeMillis() - at) : "");
+        TextView v = text(summary, 9, TEXT);
+        v.setPadding(dp(10), dp(7), dp(10), dp(7));
+        v.setBackground(bg(CARD_SOFT, BORDER, 11));
+        v.setOnClickListener(view -> showDiagnosticsDetail(event, callback, stage, sent, received, err));
+        box.addView(v);
+
         content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
@@ -732,20 +768,29 @@ public class MainActivity extends Activity {
         boolean p = have && isProxyReady(lastConnectionStatus);
         boolean t = have && isTunnelReady(lastConnectionStatus);
 
-        addSectionHeader("Connection",
-                connectionFresh ? "fresh" :
-                        (connectionSnapshotAt <= 0 ? "waiting" :
-                                "last known • " + formatAge(System.currentTimeMillis() - connectionSnapshotAt)));
-
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(8), dp(7), dp(8), dp(8));
+        box.setPadding(dp(10), dp(8), dp(10), dp(9));
         box.setBackground(bg(CARD, BORDER, 13));
+
+        LinearLayout title = new LinearLayout(this);
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        TextView h = text("Connection", 13, TEXT);
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.addView(h, new LinearLayout.LayoutParams(0, dp(23), 1));
+
+        String freshness = connectionFresh ? "fresh" :
+                (connectionSnapshotAt <= 0 ? "waiting" :
+                        "last known • " + formatAge(System.currentTimeMillis() - connectionSnapshotAt));
+        TextView f = text(freshness, 9, connectionFresh ? MUTED : YELLOW);
+        f.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        title.addView(f, new LinearLayout.LayoutParams(dp(145), dp(23)));
+        box.addView(title);
 
         LinearLayout row = new LinearLayout(this);
         row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED),
                 new LinearLayout.LayoutParams(0, dp(42), 1));
-        LinearLayout q = new LinearLayout.LayoutParams(0, dp(42), 1);
+        LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(42), 1);
         q.setMargins(dp(5), 0, 0, 0);
         row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED), q);
         q = new LinearLayout.LayoutParams(0, dp(42), 1);
@@ -753,13 +798,14 @@ public class MainActivity extends Activity {
         row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
         box.addView(row);
 
-        TextView note = text("The background monitor is the single connection source of truth.", 9, MUTED);
+        TextView note = text("Background monitor is the single connection source of truth.", 9, MUTED);
         note.setPadding(dp(2), dp(5), dp(2), 0);
         box.addView(note);
 
         logHost = new LinearLayout(this);
         logHost.setOrientation(LinearLayout.VERTICAL);
         box.addView(logHost);
+
         content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
