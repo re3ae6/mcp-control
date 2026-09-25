@@ -124,6 +124,7 @@ public class MainActivity extends Activity {
     }
 
     private void startConnectionMonitor() {
+        if (getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("emergency_killed", false)) return;
         try {
             Intent i = new Intent(this, ConnectionMonitorService.class);
             if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -1058,7 +1059,14 @@ public class MainActivity extends Activity {
             bridgeFailure("Could not unlock the control plane in Termux.");
             return;
         }
-        handler.postDelayed(()->{syncPolicyAndStatus();},900);
+        handler.postDelayed(()->{
+            getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                    .putBoolean("emergency_locked", false)
+                    .putBoolean("emergency_killed", false)
+                    .apply();
+            startConnectionMonitor();
+            syncPolicyAndStatus();
+        },900);
     }
 }
 
