@@ -39,6 +39,9 @@ def read_policy() -> dict[str, Any]:
 
 def set_capability(capability_id: str, state: str) -> None:
     policy = load_policy()
+    if policy.get("master_lock", True):
+        _audit("set_capability", "DENY", f"master_lock:{capability_id}={state}")
+        raise PermissionError("master_lock_active")
     set_state(policy, capability_id, state)
     save_policy(policy)
     _audit("set_capability", "ALLOW", f"{capability_id}={state}")
