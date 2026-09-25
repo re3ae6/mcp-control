@@ -113,20 +113,26 @@ public class ConnectionMonitorService extends Service {
                     JSONObject result = new JSONObject(out);
                     if (result.has("connected")) {
                         boolean connected = result.optBoolean("connected");
-                        mcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
+                        boolean newMcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
                                 || result.optBoolean("mcp_ok", false);
-                        proxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
+                        boolean newProxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
                                 || result.optBoolean("proxy_ok", false);
                         String tunnel = result.optString("tunnel", "").toLowerCase();
-                        tunnelReady = tunnel.contains("live") || tunnel.contains("ready")
+                        boolean newTunnelReady = tunnel.contains("live") || tunnel.contains("ready")
                                 || result.optBoolean("tunnel_ok", false);
+                        boolean indicatorChanged = mcpReady != newMcpReady
+                                || proxyReady != newProxyReady
+                                || tunnelReady != newTunnelReady;
+                        mcpReady = newMcpReady;
+                        proxyReady = newProxyReady;
+                        tunnelReady = newTunnelReady;
                         prefs.edit()
                                 .putBoolean("monitor_connected", connected)
                                 .putLong("monitor_received_at", receivedAt)
                                 .putString("monitor_status_json", result.toString())
                                 .putString("monitor_state", "ok")
                                 .apply();
-                        updateNotification();
+                        if (indicatorChanged) updateNotification();
                     }
                 } catch (Exception ignored) {}
             }
@@ -169,7 +175,7 @@ public class ConnectionMonitorService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
                 .setContentIntent(contentIntent)
-                .setSmallIcon(android.R.drawable.ic_popup_sync)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
                 .setShowWhen(false)
@@ -209,7 +215,7 @@ public class ConnectionMonitorService extends Service {
         views.setTextViewText(R.id.notification_mcp_light, mcpLight);
         views.setTextViewText(R.id.notification_proxy_light, proxyLight);
         views.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
-        views.setTextViewText(R.id.notification_exit, "EXIT");
+        views.setTextViewText(R.id.notification_exit, "⛔");
         views.setTextColor(R.id.notification_exit, 0xFFFFFFFF);
     }
 
