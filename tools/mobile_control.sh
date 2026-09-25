@@ -67,7 +67,17 @@ PY
       ;;
     unlock)
       [ "${2:-}" = "UNLOCK" ] || return 2
-      PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy,save_policy,set_master_lock; from core.trusted_control import _audit; p=load_policy(); set_master_lock(p,False); save_policy(p); _audit("unlock","ALLOW","local_ui_confirmed"); print(json.dumps({"ok":true,"master_lock":false}))'
+      PYTHONPATH="$REPO" python3 - "UNLOCK" <<'PY'
+import sys
+import json
+from core.trusted_control import unlock
+try:
+    result = unlock(sys.argv[1], local_ui=True)
+    print(json.dumps({"ok": True, "master_lock": False}))
+except PermissionError as e:
+    print(json.dumps({"ok": False, "error": str(e)}))
+    raise
+PY
       ;;
     start|connect)
       env MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
