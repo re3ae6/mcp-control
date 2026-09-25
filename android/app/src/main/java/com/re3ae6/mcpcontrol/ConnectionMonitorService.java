@@ -17,8 +17,6 @@ import org.json.JSONObject;
 
 public class ConnectionMonitorService extends Service {
     private static final String CHANNEL_ID = "mcp_connection_monitor";
-    private static final String ACTION_LOCK = "com.re3ae6.mcpcontrol.LOCK";
-    private static final String ACTION_KILL = "com.re3ae6.mcpcontrol.KILL";
     private static final String ACTION_EXIT = "com.re3ae6.mcpcontrol.EXIT";
     private static final String ACTION_NOOP = "com.re3ae6.mcpcontrol.NOOP";
     private static final int NOTIFICATION_ID = 4201;
@@ -145,38 +143,27 @@ public class ConnectionMonitorService extends Service {
                 this, 4202, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        PendingIntent lockIntent = actionIntent(ACTION_LOCK, 4203);
-        PendingIntent killIntent = actionIntent(ACTION_KILL, 4204);
         PendingIntent exitIntent = actionIntent(ACTION_EXIT, 4205);
         PendingIntent noopIntent = actionIntent(ACTION_NOOP, 4206);
-
-        boolean locked = getSharedPreferences("bridge", MODE_PRIVATE)
-                .getBoolean("emergency_locked", false);
-        boolean killed = getSharedPreferences("bridge", MODE_PRIVATE)
-                .getBoolean("emergency_killed", false);
 
         String mcpLight = "●";
         String proxyLight = "●";
         String tunnelLight = "●";
 
         RemoteViews small = new RemoteViews(getPackageName(), R.layout.notification_monitor_small);
-        setMonitorViews(small, mcpLight, proxyLight, tunnelLight, locked, killed);
+        setMonitorViews(small, mcpLight, proxyLight, tunnelLight);
         setMonitorLightColors(small);
         small.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
         small.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
         small.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
-        small.setOnClickPendingIntent(R.id.notification_lock, lockIntent);
-        small.setOnClickPendingIntent(R.id.notification_kill, killIntent);
         small.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         RemoteViews large = new RemoteViews(getPackageName(), R.layout.notification_monitor_large);
-        setMonitorViews(large, mcpLight, proxyLight, tunnelLight, locked, killed);
+        setMonitorViews(large, mcpLight, proxyLight, tunnelLight);
         setMonitorLightColors(large);
         large.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
-        large.setOnClickPendingIntent(R.id.notification_lock, lockIntent);
-        large.setOnClickPendingIntent(R.id.notification_kill, killIntent);
         large.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         return new Notification.Builder(this, CHANNEL_ID)
@@ -207,16 +194,15 @@ public class ConnectionMonitorService extends Service {
     }
 
     private void setMonitorViews(RemoteViews views, String mcpLight, String proxyLight,
-                                 String tunnelLight, boolean locked, boolean killed) {
+                                 String tunnelLight) {
         views.setTextViewText(R.id.notification_mcp, "MCP");
         views.setTextViewText(R.id.notification_proxy, "Proxy");
         views.setTextViewText(R.id.notification_tunnel, "Tunnel");
         views.setTextViewText(R.id.notification_mcp_light, mcpLight);
         views.setTextViewText(R.id.notification_proxy_light, proxyLight);
         views.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
-        views.setTextViewText(R.id.notification_lock, locked ? "Locked" : "Lock");
-        views.setTextViewText(R.id.notification_kill, killed ? "Killed" : "Kill");
         views.setTextViewText(R.id.notification_exit, "EXIT");
+        views.setTextColor(R.id.notification_exit, 0xFFFFFFFF);
     }
 
     private void updateNotification() {
@@ -242,37 +228,21 @@ public class ConnectionMonitorService extends Service {
             android.content.SharedPreferences prefs =
                     getSharedPreferences("bridge", MODE_PRIVATE);
 
-            if (ACTION_LOCK.equals(action)) {
-                // Apply the real policy lock first, then engage the local fail-closed lock.
-                // This keeps the notification action equivalent to the in-app Lock control.
-                prefs.edit()
-                        .putBoolean("emergency_locked", true)
-                        .putBoolean("emergency_killed", false)
-                        .apply();
-                updateNotification();
-                // Do not block the notification action on the Termux bridge dispatch.
-                // The local fail-closed state is already active and visible immediately.
-                handler.post(() -> McpBridge.run(this, "lock"));
-                return START_STICKY;
-            }
-
-            if (ACTION_KILL.equals(action)) {
-                // KILL is an emergency bridge lock, not a request to kill this monitor.
-                // Keep the foreground notification alive so the user can see the state.
-                prefs.edit()
-                        .putBoolean("emergency_locked", true)
-                        .putBoolean("emergency_killed", true)
-                        .apply();
-                checking = false;
-                updateNotification();
-                return START_STICKY;
-            }
-
             if (ACTION_NOOP.equals(action)) {
                 return START_STICKY;
             }
 
             if (ACTION_EXIT.equals(action)) {
+                checking = false;
+                handler.removeCallbacks(loop);
+
+                // Explicit shutdown: stop automatic recovery, then tear down the
+                // MCP stack once before removing this monitor and notification.
+                prefs.edit()
+                        .putBoolean("monitor_exit_requested", true)
+                        .apply();
+                McpBridge.run(this, "exit");
+
                 stopForeground(true);
                 stopSelf();
                 return START_NOT_STICKY;
