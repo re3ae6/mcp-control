@@ -120,6 +120,13 @@ public class MainActivity extends Activity {
         return intent != null && intent.getBooleanExtra("close_from_notification", false);
     }
 
+
+
+    @Override public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+    }
+
     @Override protected void onResume() {
         super.onResume();
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
