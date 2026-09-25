@@ -219,7 +219,7 @@ public class MainActivity extends Activity {
         box.setPadding(dp(16), dp(15), dp(16), dp(16));
         box.setBackground(bg(CARD, BORDER, 18));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(5), 0, dp(5));
+        p.setMargins(0, dp(4), 0, dp(4));
         content.addView(box, p);
 
         TextView a = text(title, 19, TEXT);
@@ -238,7 +238,7 @@ public class MainActivity extends Activity {
         box.setPadding(dp(16), dp(14), dp(16), dp(14));
         box.setBackground(bg(locked ? 0xfffff1f1 : 0xffeef8f3, locked ? 0xfff0caca : 0xffcfe9dc, 18));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(7), 0, dp(7));
+        p.setMargins(0, dp(4), 0, dp(4));
         content.addView(box, p);
 
         LinearLayout copy = new LinearLayout(this);
@@ -270,18 +270,26 @@ public class MainActivity extends Activity {
         return box;
     }
 
-    private void addStatusCard(boolean m, boolean p, boolean t) {
-        addCard("Connection", "Local services");
+    private void addBridgeConnectionCard(boolean m, boolean p, boolean t) {
+        addCard("Bridge & Connection", "Local services");
         LinearLayout row = new LinearLayout(this);
-        row.setPadding(0, dp(4), 0, 0);
-        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED), new LinearLayout.LayoutParams(0, dp(76), 1));
-        LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(76), 1);
-        q.setMargins(dp(7), 0, 0, 0);
+        row.setPadding(0, dp(3), 0, 0);
+        row.addView(metric("MCP", m ? "Ready" : "Offline", m ? GREEN : RED),
+                new LinearLayout.LayoutParams(0, dp(70), 1));
+        LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(70), 1);
+        q.setMargins(dp(6), 0, 0, 0);
         row.addView(metric("Proxy", p ? "Ready" : "Offline", p ? GREEN : RED), q);
-        q = new LinearLayout.LayoutParams(0, dp(76), 1);
-        q.setMargins(dp(7), 0, 0, 0);
+        q = new LinearLayout.LayoutParams(0, dp(70), 1);
+        q.setMargins(dp(6), 0, 0, 0);
         row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
         content.addView(row);
+
+        Button connect = button("Connect / Refresh", v -> refresh());
+        connect.setBackground(bg(TEXT, TEXT, 22));
+        connect.setTextColor(Color.WHITE);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(42));
+        cp.setMargins(0, dp(7), 0, 0);
+        content.addView(connect, cp);
     }
 
     private void renderOffline() {
@@ -291,13 +299,7 @@ public class MainActivity extends Activity {
 
         addCard("System Overview", "Secure local controller");
         addMasterBanner(true);
-        addStatusCard(false, false, false);
-
-        addCard("Bridge Offline", "Controls remain safe and visible. Connect to bring the bridge online.");
-        Button b = button("Connect / Refresh", v -> refresh());
-        b.setBackground(bg(TEXT, TEXT, 24));
-        b.setTextColor(Color.WHITE);
-        content.addView(b, new LinearLayout.LayoutParams(-1, dp(46)));
+        addBridgeConnectionCard(false, false, false);
 
         highlightTab();
     }
@@ -387,7 +389,7 @@ public class MainActivity extends Activity {
         box.setPadding(dp(15),dp(14),dp(15),dp(14));
         box.setBackground(bg(CARD,BORDER,18));
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
-        bp.setMargins(0,dp(5),0,dp(5));
+        bp.setMargins(0,dp(4),0,dp(4));
         content.addView(box,bp);
 
         LinearLayout top=new LinearLayout(this);
