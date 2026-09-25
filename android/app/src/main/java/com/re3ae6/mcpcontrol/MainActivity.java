@@ -97,6 +97,10 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        if (isCloseFromNotification(getIntent())) {
+            finishAndRemoveTask();
+            return;
+        }
         buildUi();
         renderOffline();
         ensureNotificationPermission();
@@ -104,6 +108,16 @@ public class MainActivity extends Activity {
         if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) {
             startConnectionMonitor();
         }
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (isCloseFromNotification(intent)) finishAndRemoveTask();
+    }
+
+    private boolean isCloseFromNotification(Intent intent) {
+        return intent != null && intent.getBooleanExtra("close_from_notification", false);
     }
 
     @Override protected void onResume() {
