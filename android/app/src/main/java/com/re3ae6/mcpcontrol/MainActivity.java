@@ -525,7 +525,8 @@ public class MainActivity extends Activity {
         status.setText("●  Disconnected");
         status.setTextColor(RED);
         render();
-        content.addView(text(message, 11, RED));
+        String detail = getSharedPreferences("bridge", MODE_PRIVATE).getString("last_error", "");
+        content.addView(text(detail == null || detail.isEmpty() ? message : detail, 11, RED));
     }
 
     private void syncPolicyAndStatus() {
