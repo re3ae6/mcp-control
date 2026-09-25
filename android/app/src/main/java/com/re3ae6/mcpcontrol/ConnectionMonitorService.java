@@ -178,6 +178,7 @@ public class ConnectionMonitorService extends Service {
                 .setSmallIcon(R.mipmap.mcp_control_launcher)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
+                .setCustomHeadsUpContentView(large)
                 .setShowWhen(false)
                 .setLocalOnly(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
