@@ -102,6 +102,9 @@ def _file_scope(params):
             return capability
     return "dangerous.outside_allowlist"
 
+# Preserve the real MCP implementation before installing the policy wrapper.
+_original = mcp_core.call_tool
+
 def guarded_call(session, name, params, on_progress=None):
     cap = _capability(name)
     decisions = [cap]
