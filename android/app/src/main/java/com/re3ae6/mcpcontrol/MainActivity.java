@@ -541,17 +541,26 @@ public class MainActivity extends Activity {
                                 String statusErr = bridge.getString("error_message_status", "");
                                 String connectState = bridge.getString("callback_state_connect", "unknown");
                                 String statusState = bridge.getString("callback_state_status", "unknown");
+                                String connectStage = bridge.getString("callback_stage_connect", "");
+                                String statusStage = bridge.getString("callback_stage_status", "");
+                                String connectErr = bridge.getString("error_message_connect", "");
+                                String connectStderr = bridge.getString("stderr_connect", "");
+                                String statusStderr = bridge.getString("stderr_status", "");
                                 String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
-                                addLogBox("Connect did not become ready.\n"
-                                        + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing")
-                                        + " callback=" + connectState
-                                        + " sent=" + (connectSentAt > 0 ? "yes" : "no") + "\n"
-                                        + "status_result=" + (statusAt > 0 ? "received" : "missing")
-                                        + " callback=" + statusState
-                                        + " sent=" + (statusSentAt > 0 ? "yes" : "no")
-                                        + " exit=" + statusExit + " error=" + statusErrorDetail + "\n"
-                                        + detail
-                                        + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
+                                StringBuilder diag = new StringBuilder("Connect did not become ready.\\n")
+                                        .append("DISPATCH connect: ").append(connectSentAt > 0 ? "sent" : "not sent")
+                                        .append(" | callback: ").append(connectState)
+                                        .append(" | stage: ").append(connectStage.isEmpty() ? "none" : connectStage).append("\\n")
+                                        .append("DISPATCH status: ").append(statusSentAt > 0 ? "sent" : "not sent")
+                                        .append(" | callback: ").append(statusState)
+                                        .append(" | stage: ").append(statusStage.isEmpty() ? "none" : statusStage).append("\\n")
+                                        .append("RESULT status: exit=").append(statusExit)
+                                        .append(" error=").append(statusErrorDetail).append("\\n");
+                                if (connectErr != null && !connectErr.isEmpty()) diag.append("CONNECT ERROR: ").append(connectErr).append("\\n");
+                                if (connectStderr != null && !connectStderr.isEmpty()) diag.append("CONNECT STDERR: ").append(connectStderr).append("\\n");
+                                if (statusStderr != null && !statusStderr.isEmpty()) diag.append("STATUS STDERR: ").append(statusStderr).append("\\n");
+                                diag.append(detail);
+                                addLogBox(diag.toString());
                             }
                             return;
                         }
