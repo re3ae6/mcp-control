@@ -344,8 +344,12 @@ public class MainActivity extends Activity {
         actions.addView(connect, new LinearLayout.LayoutParams(0, dp(38), 1));
 
         masterLockButton = button("Lock", v -> toggleMasterLock());
+        masterLockButton.setSingleLine(true);
+        masterLockButton.setHorizontallyScrolling(true);
+        masterLockButton.setEllipsize(null);
+        masterLockButton.setPadding(dp(8), dp(2), dp(8), dp(2));
         masterLockButton.setBackground(bg(CARD, BORDER, 18));
-        LinearLayout.LayoutParams lockLp = new LinearLayout.LayoutParams(dp(74), dp(38));
+        LinearLayout.LayoutParams lockLp = new LinearLayout.LayoutParams(dp(88), dp(38));
         lockLp.setMargins(dp(7), 0, 0, 0);
         actions.addView(masterLockButton, lockLp);
         header.addView(actions);
