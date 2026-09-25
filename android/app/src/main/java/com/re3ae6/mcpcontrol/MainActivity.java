@@ -495,63 +495,68 @@ public class MainActivity extends Activity {
 
     private void pollConnection(int attempt) {
         long delay = attempt == 0 ? 1200L : 2000L;
-        handler.postDelayed(() -> {
-            clearOutput();
-            clearCommandResult("status");
-            if (!McpBridge.run(this, "status")) {
-                bridgeFailure("Could not query Termux. Check Termux permission: Run commands in Termux.");
-                return;
+        handler.postDelayed(new Runnable() {
+            @Override public void run() {
+                clearOutput();
+                clearCommandResult("status");
+                if (!McpBridge.run(MainActivity.this, "status")) {
+                    bridgeFailure("Could not query Termux. Check Termux permission: Run commands in Termux.");
+                    return;
+                }
+                handler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        String statusError = commandError("status");
+                        if (!statusError.isEmpty()) {
+                            bridgeFailure(statusError);
+                            return;
+                        }
+                        boolean connected = applyStatusResult();
+                        if (connected) {
+                            loadPolicyAndFinish();
+                            return;
+                        }
+                        android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+                        int connectExit = bridge.getInt("exit_connect", -1);
+                        int connectErrorCode = bridge.getInt("error_code_connect", -1);
+                        long connectAt = bridge.getLong("received_at_connect", 0L);
+                        boolean connectFailed = (connectExit > 0 || connectErrorCode > 0) && connectAt > 0 &&
+                                System.currentTimeMillis() - connectAt < 5000L;
+                        if (connectFailed || attempt >= 3) {
+                            String err = commandError("connect");
+                            if (err.isEmpty()) err = bridge.getString("stderr_connect", "");
+                            if (err.isEmpty()) err = bridge.getString("stdout_connect", "");
+                            busy = false;
+                            render();
+                            if (err != null && !err.isEmpty()) {
+                                addLogBox("Connect: " + err);
+                            } else {
+                                long connectReceivedAt = bridge.getLong("received_at_connect", 0L);
+                                long statusAt = bridge.getLong("received_at_status", 0L);
+                                long connectSentAt = bridge.getLong("sent_at_connect", 0L);
+                                long statusSentAt = bridge.getLong("sent_at_status", 0L);
+                                int statusExit = bridge.getInt("exit_status", -1);
+                                int statusErrorDetail = bridge.getInt("error_code_status", -1);
+                                String statusErr = bridge.getString("error_message_status", "");
+                                String connectState = bridge.getString("callback_state_connect", "unknown");
+                                String statusState = bridge.getString("callback_state_status", "unknown");
+                                String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
+                                addLogBox("Connect did not become ready.\n"
+                                        + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing")
+                                        + " callback=" + connectState
+                                        + " sent=" + (connectSentAt > 0 ? "yes" : "no") + "\n"
+                                        + "status_result=" + (statusAt > 0 ? "received" : "missing")
+                                        + " callback=" + statusState
+                                        + " sent=" + (statusSentAt > 0 ? "yes" : "no")
+                                        + " exit=" + statusExit + " error=" + statusErrorDetail + "\n"
+                                        + detail
+                                        + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
+                            }
+                            return;
+                        }
+                        pollConnection(attempt + 1);
+                    }
+                }, 550L);
             }
-            handler.postDelayed(() -> {
-                String statusError = commandError("status");
-                if (!statusError.isEmpty()) {
-                    bridgeFailure(statusError);
-                    return;
-                }
-                boolean connected = applyStatusResult();
-                if (connected) {
-                    loadPolicyAndFinish();
-                    return;
-                }
-                android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
-                int connectExit = bridge.getInt("exit_connect", -1);
-                int connectErrorCode = bridge.getInt("error_code_connect", -1);
-                long connectAt = bridge.getLong("received_at_connect", 0L);
-                boolean connectFailed = (connectExit > 0 || connectErrorCode > 0) && connectAt > 0 &&
-                        System.currentTimeMillis() - connectAt < 5000L;
-                if (connectFailed || attempt >= 3) {
-                    String err = commandError("connect");
-                    if (err.isEmpty()) err = bridge.getString("stderr_connect", "");
-                    if (err.isEmpty()) err = bridge.getString("stdout_connect", "");
-                    busy = false;
-                    render();
-                    if (err != null && !err.isEmpty()) {
-                        addLogBox("Connect: " + err);
-                    } else {
-                        long connectReceivedAt = bridge.getLong("received_at_connect", 0L);
-                        long statusAt = bridge.getLong("received_at_status", 0L);
-                        long connectSentAt = bridge.getLong("sent_at_connect", 0L);
-                        long statusSentAt = bridge.getLong("sent_at_status", 0L);
-                        int statusExit = bridge.getInt("exit_status", -1);
-                        int statusErrorDetail = bridge.getInt("error_code_status", -1);
-                        String statusErr = bridge.getString("error_message_status", "");
-                        String connectState = bridge.getString("callback_state_connect", "unknown");
-                        String statusState = bridge.getString("callback_state_status", "unknown");
-                        String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
-                        addLogBox("Connect did not become ready.\n"
-                                + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing")
-                                + " callback=" + connectState
-                                + " sent=" + (connectSentAt > 0 ? "yes" : "no") + "\n"
-                                + "status_result=" + (statusAt > 0 ? "received" : "missing")
-                                + " callback=" + statusState
-                                + " sent=" + (statusSentAt > 0 ? "yes" : "no")
-                                + " exit=" + statusExit + " error=" + statusErrorDetail + "\n"
-                                + detail
-                                + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
-                    return;
-                }
-                pollConnection(attempt + 1);
-            }, 550L);
         }, delay);
     }
 
