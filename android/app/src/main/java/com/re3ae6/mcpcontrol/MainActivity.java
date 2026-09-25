@@ -655,8 +655,8 @@ public class MainActivity extends Activity {
         clearOutput();
         clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
-            if (attempt < 2) {
-                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 500L);
+            if (attempt < 5) {
+                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 700L);
             } else {
                 operationFailure("Connected, but the policy query could not be started.");
             }
@@ -714,13 +714,22 @@ public class MainActivity extends Activity {
         if (clipboard != null) {
             clipboard.setPrimaryClip(ClipData.newPlainText("MCP Control diagnostic", finalMessage));
         }
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(16), dp(14), dp(16), dp(14));
+        box.setBackground(bg(CARD, BORDER, 18));
+        TextView heading = text("Log", 13, TEXT);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(24)));
         TextView log = text(finalMessage, 12, TEXT);
         log.setTextIsSelectable(true);
         log.setGravity(Gravity.TOP | Gravity.START);
-        log.setPadding(dp(12), dp(12), dp(12), dp(12));
-        log.setBackground(bg(0xfffaf9f6, BORDER, 12));
-        content.addView(log, new LinearLayout.LayoutParams(-1, -2));
-        if (scrollView != null) scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+        log.setPadding(0, dp(8), 0, 0);
+        box.addView(log, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(8), 0, dp(8));
+        content.addView(box, 0, lp);
+        if (scrollView != null) scrollView.post(() -> scrollView.fullScroll(View.FOCUS_UP));
     }
 
     private void syncPolicyAndStatus() {
