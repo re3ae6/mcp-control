@@ -19,6 +19,9 @@ public class PluginResultsReceiver extends BroadcastReceiver {
         }
 
         String command = intent.getStringExtra("mcp_control_command");
+        if (command == null || command.isEmpty()) {
+            command = intent.getStringExtra("com.re3ae6.mcpcontrol.COMMAND");
+        }
         String token = intent.getStringExtra("com.re3ae6.mcpcontrol.TOKEN");
         if (command == null || command.isEmpty() || token == null || token.isEmpty()) {
             diagnostic.putString("callback_state", "callback_missing_identity").apply();
