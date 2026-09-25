@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.enforcer import check, record, request_approval, consume_approval
+from core.enforcer import check, record, request_approval_bundle, consume_approval_bundle
 from core.command_guard import authorize_command
 from core.capability_map import capability_for_tool, secondary_for_tool, git_capability_for_command, file_capabilities_for_path
 from termux_mcp import mcp_core, mcp_server
@@ -42,41 +42,14 @@ def guarded_call(session, name, params, on_progress=None):
     for required_cap in _file_decisions(name, params):
         if required_cap not in decisions: decisions.append(required_cap)
 
+    ask_capabilities = []
     for required_cap in decisions:
         d = check(required_cap)
         if d.allowed:
             continue
-
         if d.requires_approval:
-            approval_id = params.get("approval_id") if isinstance(params, dict) else None
-            if approval_id:
-                clean_params = dict(params)
-                clean_params.pop("approval_id", None)
-                try:
-                    consume_approval(approval_id, required_cap, name, clean_params)
-                except PermissionError as e:
-                    record(required_cap, f"mcp.tools/call:{name}", f"ASK_DENY:{e}")
-                    return {
-                        "content": [{"type": "text", "text": f"MCP CONTROL: approval denied: {e}"}],
-                        "isError": True,
-                    }
-                record(required_cap, f"mcp.tools/call:{name}", "APPROVED_ALLOW")
-                continue
-
-            approval = request_approval(required_cap, name, params)
-            record(required_cap, f"mcp.tools/call:{name}", "ASK")
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": (
-                        f"MCP CONTROL: approval required for {required_cap}; "
-                        f"approval_id={approval['approval_id']}; "
-                        f"expires_at={approval['expires_at']}"
-                    ),
-                }],
-                "isError": True,
-            }
-
+            ask_capabilities.append(required_cap)
+            continue
         record(required_cap, f"mcp.tools/call:{name}", "DENY")
         return {
             "content": [{
@@ -85,6 +58,38 @@ def guarded_call(session, name, params, on_progress=None):
             }],
             "isError": True,
         }
+
+    if ask_capabilities:
+        approval_id = params.get("approval_id") if isinstance(params, dict) else None
+        clean_params = dict(params) if isinstance(params, dict) else {}
+        clean_params.pop("approval_id", None)
+        if approval_id:
+            try:
+                consume_approval_bundle(approval_id, ask_capabilities, name, clean_params)
+            except PermissionError as e:
+                for required_cap in ask_capabilities:
+                    record(required_cap, f"mcp.tools/call:{name}", f"ASK_DENY:{e}")
+                return {
+                    "content": [{"type": "text", "text": f"MCP CONTROL: approval denied: {e}"}],
+                    "isError": True,
+                }
+            for required_cap in ask_capabilities:
+                record(required_cap, f"mcp.tools/call:{name}", "APPROVED_ALLOW")
+        else:
+            approval = request_approval_bundle(ask_capabilities, name, clean_params)
+            for required_cap in ask_capabilities:
+                record(required_cap, f"mcp.tools/call:{name}", "ASK")
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": (
+                        f"MCP CONTROL: approval required for {', '.join(sorted(ask_capabilities))}; "
+                        f"approval_id={approval['approval_id']}; "
+                        f"expires_at={approval['expires_at']}"
+                    ),
+                }],
+                "isError": True,
+            }
 
     for required_cap in decisions:
         record(required_cap, f"mcp.tools/call:{name}", "ALLOW")
