@@ -34,7 +34,7 @@ public final class McpBridge {
         int flags = PendingIntent.FLAG_ONE_SHOT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
-                PendingIntent.getBroadcast(context, code, result, flags));
+                PendingIntent.getService(context, code, result, flags));
 
         long sentAt = System.currentTimeMillis();
         context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
