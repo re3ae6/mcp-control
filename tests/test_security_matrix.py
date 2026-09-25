@@ -1,5 +1,4 @@
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +59,9 @@ class SecurityMatrixTests(unittest.TestCase):
         self.assertEqual(policy.decision(p, "does.not.exist"), "deny")
         with self.assertRaises(PermissionError):
             policy.require(p, "does.not.exist")
+
+        p["master_lock"] = False
+        policy.save_policy(p)
         with self.assertRaises(KeyError):
             trusted_control.set_capability("does.not.exist", "allow")
 
@@ -101,22 +103,23 @@ class SecurityMatrixTests(unittest.TestCase):
     def test_approval_cannot_cross_capability_or_request(self):
         p = policy.load_policy()
         p["master_lock"] = False
+        p["capabilities"]["terminal"][0]["state"] = "ask"
         policy.save_policy(p)
 
         item = approval.create("terminal.python", "terminal.run", {"command": "echo ok"})
         approval.approve(item["approval_id"])
         with self.assertRaisesRegex(PermissionError, "approval_request_mismatch"):
-            approval.consume(item["approval_id"], "terminal.bash", "terminal.run", {"command": "echo ok"})
+            approval.consume(item["approval_id"], "terminal.python", "terminal.run", {"command": "echo blocked"})
 
     def test_unlock_requires_local_ui_or_tty(self):
         with patch("sys.stdin.isatty", return_value=False):
-            with self.assertRaisesRegex(PermissionError, "interactive_confirmation_required"):
+            with self.assertRaisesRegex(PermissionError, "trusted_control_unlock_requires_local_confirmation"):
                 trusted_control.unlock("UNLOCK")
         trusted_control.unlock("UNLOCK", local_ui=True)
         self.assertFalse(policy.load_policy()["master_lock"])
 
     def test_dispatch_never_exposes_unlock(self):
-        with self.assertRaisesRegex(PermissionError, "action_not_allowed"):
+        with self.assertRaisesRegex(PermissionError, "trusted_control_action_denied:unlock"):
             trusted_control.dispatch("unlock", confirmation="UNLOCK", local_ui=True)
 
 
