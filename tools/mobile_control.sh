@@ -65,6 +65,58 @@ PY
     lock)
       PYTHONPATH="$REPO" python3 -c 'import json; from core.trusted_control import lock; lock(); print(json.dumps({"ok":true,"master_lock":true}))'
       ;;
+    exit)
+      # Explicit shutdown path for the notification EXIT action.
+      # Stop the watchdog first so it cannot immediately recreate the MCP stack.
+      pkill -f "$HOME/po_recorder/tools/mcp_watchdog.sh" >/dev/null 2>&1 || true
+      pkill -f "mcp_watchdog.sh" >/dev/null 2>&1 || true
+
+      # Stop tunnel and guarded MCP server using exact command patterns.
+      pkill -f "$HOME/tunnel-client-install/tunnel-client run .*po-termux" >/dev/null 2>&1 || true
+      pkill -f "mcp-control/runtime/guarded_server.py" >/dev/null 2>&1 || true
+      pkill -f "termux-native-mcp.*--host 127.0.0.1.*--port 8081" >/dev/null 2>&1 || true
+
+      # The proxy is an anonymous Python listener; close only the process
+      # owning TCP port 18081 rather than unrelated Python processes.
+      python3 - <<'PY'
+import os
+import signal
+from pathlib import Path
+
+PORT_HEX = f"{18081:04X}"
+inodes = set()
+for proc in ("/proc/net/tcp", "/proc/net/tcp6"):
+    try:
+        for line in Path(proc).read_text().splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 10:
+                local = parts[1]
+                state = parts[3]
+                inode = parts[9]
+                if state == "0A" and local.rsplit(":", 1)[-1].upper() == PORT_HEX:
+                    inodes.add(inode)
+    except Exception:
+        pass
+
+if inodes:
+    wanted = {f"socket:[{inode}]" for inode in inodes}
+    for pid_dir in Path("/proc").glob("[0-9]*"):
+        try:
+            pid = int(pid_dir.name)
+            for fd in (pid_dir / "fd").iterdir():
+                try:
+                    if os.readlink(fd) in wanted:
+                        os.kill(pid, signal.SIGTERM)
+                        break
+                except Exception:
+                    pass
+        except Exception:
+            pass
+PY
+
+      rm -f "$HOME/po_recorder/tmp/mcp_tmp" >/dev/null 2>&1 || true
+      printf '%s\n' '{"ok":true,"mcp_stopped":true,"proxy_stopped":true,"tunnel_stopped":true}'
+      ;;
     unlock)
       [ "${2:-}" = "UNLOCK" ] || return 2
       PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy,save_policy,set_master_lock; from core.trusted_control import _audit; p=load_policy(); set_master_lock(p,False); save_policy(p); _audit("unlock","ALLOW","local_ui_confirmed"); print(json.dumps({"ok":true,"master_lock":false}))'
