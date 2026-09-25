@@ -3,7 +3,8 @@ package com.re3ae6.mcpcontrol;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.Service;\nimport android.app.ActivityManager;
+import android.app.Service;
+import android.app.ActivityManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -331,7 +332,11 @@ public class ConnectionMonitorService extends Service {
         super.onTaskRemoved(rootIntent);
     }
 
-    @Override public void onDestroy()
+    @Override public void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        super.onDestroy();
+    }
 
     @Override public IBinder onBind(Intent intent) {
         return null;
