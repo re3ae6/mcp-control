@@ -519,15 +519,27 @@ public class MainActivity extends Activity {
                 long connectAt = bridge.getLong("received_at_connect", 0L);
                 boolean connectFailed = (connectExit > 0 || connectErrorCode > 0) && connectAt > 0 &&
                         System.currentTimeMillis() - connectAt < 5000L;
-                if (connectFailed || attempt >= 34) {
+                if (connectFailed || attempt >= 3) {
                     String err = commandError("connect");
                     if (err.isEmpty()) err = bridge.getString("stderr_connect", "");
+                    if (err.isEmpty()) err = bridge.getString("stdout_connect", "");
                     busy = false;
                     render();
                     if (err != null && !err.isEmpty()) {
                         addLogBox("Connect: " + err);
                     } else {
-                        addLogBox("Connection did not become ready. Open Termux and verify Run commands in Termux plus allow-external-apps.");
+                        long connectAt = bridge.getLong("received_at_connect", 0L);
+                        long statusAt = bridge.getLong("received_at_status", 0L);
+                        int statusExit = bridge.getInt("exit_status", -1);
+                        int statusError = bridge.getInt("error_code_status", -1);
+                        String statusErr = bridge.getString("error_message_status", "");
+                        String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
+                        addLogBox("Connect did not become ready.\n"
+                                + "connect_result=" + (connectAt > 0 ? "received" : "missing") + "\n"
+                                + "status_result=" + (statusAt > 0 ? "received" : "missing")
+                                + " exit=" + statusExit + " error=" + statusError + "\n"
+                                + detail
+                                + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
                     }
                     return;
                 }
