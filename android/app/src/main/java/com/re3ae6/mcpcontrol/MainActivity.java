@@ -101,6 +101,57 @@ public class MainActivity extends Activity {
         buildUi();
         renderOffline();
         ensureTermuxRunCommandPermission();
+        if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) {
+            startConnectionMonitor();
+        }
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("activity_visible", true)
+                .apply();
+        startConnectionMonitor();
+        applyMonitorSnapshot();
+    }
+
+    @Override protected void onPause() {
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("activity_visible", false)
+                .apply();
+        super.onPause();
+    }
+
+    private void startConnectionMonitor() {
+        try {
+            Intent i = new Intent(this, ConnectionMonitorService.class);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(i);
+            } else {
+                startService(i);
+            }
+        } catch (RuntimeException ignored) {
+            // Manual Connect / Refresh remains available if the monitor cannot start.
+        }
+    }
+
+    private void applyMonitorSnapshot() {
+        android.content.SharedPreferences prefs =
+                getSharedPreferences("bridge", MODE_PRIVATE);
+        long receivedAt = prefs.getLong("monitor_received_at", 0L);
+        if (receivedAt <= 0L || System.currentTimeMillis() - receivedAt > 30000L) return;
+
+        String json = prefs.getString("monitor_status_json", "");
+        try {
+            JSONObject o = new JSONObject(json);
+            if (o.has("connected")) {
+                connectionOk = o.optBoolean("connected");
+                lastConnectionStatus = o;
+                status.setText("●  " + (connectionOk ? "Connected" : "Disconnected"));
+                status.setTextColor(connectionOk ? GREEN : RED);
+                updateIndicators(o);
+            }
+        } catch (Exception ignored) {}
     }
 
     private void ensureTermuxRunCommandPermission() {
@@ -114,6 +165,7 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == RUN_COMMAND_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startConnectionMonitor();
                 refresh();
             } else {
                 addLogBox("Termux permission required: allow “Run commands in Termux environment” for MCP Control, then tap Connect / Refresh.");
