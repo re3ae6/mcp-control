@@ -19,13 +19,13 @@ public final class McpBridge {
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
 
-        Intent result = new Intent(context, PluginResultsService.class);
+        Intent result = new Intent(context, PluginResultsReceiver.class);
         result.putExtra("mcp_control_command", args.length == 0 ? "" : args[0]);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
         int flags = PendingIntent.FLAG_ONE_SHOT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
-                PendingIntent.getService(context, code, result, flags));
+                PendingIntent.getBroadcast(context, code, result, flags));
         String command = args.length == 0 ? "" : args[0];
         long sentAt = System.currentTimeMillis();
         context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
