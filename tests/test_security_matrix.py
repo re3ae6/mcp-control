@@ -1,6 +1,9 @@
 import json
+import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -153,6 +156,92 @@ class SecurityMatrixTests(unittest.TestCase):
     def test_dispatch_never_exposes_unlock(self):
         with self.assertRaisesRegex(PermissionError, "trusted_control_action_denied:unlock"):
             trusted_control.dispatch("unlock", confirmation="UNLOCK", local_ui=True)
+
+
+    def _guarded_module(self):
+        fake_core = types.ModuleType("termux_mcp.mcp_core")
+        fake_core.call_tool = mock.Mock(return_value={"ok": True})
+        fake_server = types.ModuleType("termux_mcp.mcp_server")
+        fake_server.run_http = mock.Mock()
+        fake_pkg = types.ModuleType("termux_mcp")
+        fake_pkg.mcp_core = fake_core
+        fake_pkg.mcp_server = fake_server
+        with patch.dict(sys.modules, {
+            "termux_mcp": fake_pkg,
+            "termux_mcp.mcp_core": fake_core,
+            "termux_mcp.mcp_server": fake_server,
+        }):
+            import importlib
+            sys.modules.pop("runtime.guarded_server", None)
+            return importlib.import_module("runtime.guarded_server")
+
+    def test_guarded_server_deny_never_executes_original(self):
+        module = self._guarded_module()
+        deny = types.SimpleNamespace(allowed=False, requires_approval=False)
+        with patch.object(module, "check", return_value=deny), patch.object(module, "record") as record:
+            result = module.guarded_call(None, "run", {"cmd": "echo ok"})
+        self.assertTrue(result["isError"])
+        self.assertEqual(module._original.call_count, 0)
+        record.assert_called()
+
+    def test_guarded_server_allow_executes_once_after_all_checks(self):
+        module = self._guarded_module()
+        allow = types.SimpleNamespace(allowed=True, requires_approval=False)
+        with patch.object(module, "check", return_value=allow), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "record"):
+            result = module.guarded_call("s", "run", {"cmd": "echo ok"})
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(module._original.call_count, 1)
+
+    def test_guarded_server_ask_stops_before_execution_and_returns_approval(self):
+        module = self._guarded_module()
+        ask = types.SimpleNamespace(allowed=False, requires_approval=True)
+        approval_item = {"approval_id": "a1", "expires_at": "2099-01-01T00:00:00+00:00"}
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "request_approval", return_value=approval_item), patch.object(module, "record"):
+            result = module.guarded_call(None, "run", {"cmd": "echo ok"})
+        self.assertTrue(result["isError"])
+        self.assertIn("approval_id=a1", result["content"][0]["text"])
+        self.assertEqual(module._original.call_count, 0)
+
+    def test_guarded_server_approved_exact_request_executes_once(self):
+        module = self._guarded_module()
+        ask = types.SimpleNamespace(allowed=False, requires_approval=True)
+        params = {"cmd": "echo ok"}
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval") as consume, patch.object(module, "record"):
+            consume.return_value = {"approval_id": "a1"}
+            result = module.guarded_call(None, "run", {**params, "approval_id": "a1"})
+        self.assertEqual(result, {"ok": True})
+        consume.assert_called_once_with("a1", "terminal.run", "run", params)
+        self.assertEqual(module._original.call_count, 1)
+
+    def test_guarded_server_tampered_approval_never_executes(self):
+        module = self._guarded_module()
+        ask = types.SimpleNamespace(allowed=False, requires_approval=True)
+        with patch.object(module, "check", return_value=ask), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "consume_approval", side_effect=PermissionError("approval_request_mismatch")), patch.object(module, "record"):
+            result = module.guarded_call(None, "run", {"cmd": "echo tampered", "approval_id": "a1"})
+        self.assertTrue(result["isError"])
+        self.assertIn("approval_request_mismatch", result["content"][0]["text"])
+        self.assertEqual(module._original.call_count, 0)
+
+    def test_guarded_server_blocks_if_secondary_capability_denied(self):
+        module = self._guarded_module()
+        allow = types.SimpleNamespace(allowed=True, requires_approval=False)
+        deny = types.SimpleNamespace(allowed=False, requires_approval=False)
+        def decision(capability):
+            return deny if capability == "mcp.execute" else allow
+        with patch.object(module, "check", side_effect=decision), patch.object(module, "authorize_command", return_value=(True, "")), patch.object(module, "record"):
+            result = module.guarded_call(None, "run", {"cmd": "echo ok"})
+        self.assertTrue(result["isError"])
+        self.assertIn("mcp.execute", result["content"][0]["text"])
+        self.assertEqual(module._original.call_count, 0)
+
+    def test_guarded_server_command_guard_runs_before_execution(self):
+        module = self._guarded_module()
+        with patch.object(module, "authorize_command", return_value=(False, "blocked")), patch.object(module, "check") as check, patch.object(module, "record"):
+            result = module.guarded_call(None, "run", {"cmd": "rm -rf x"})
+        self.assertTrue(result["isError"])
+        self.assertIn("command denied: blocked", result["content"][0]["text"])
+        check.assert_not_called()
+        self.assertEqual(module._original.call_count, 0)
 
     def test_each_control_area_has_concrete_mapped_actions(self):
         from core.capability_map import AREA_TOOL_ACTIONS, capability_for_tool
