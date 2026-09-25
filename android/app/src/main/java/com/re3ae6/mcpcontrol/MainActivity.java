@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.BatteryManager;
 import android.os.Handler;
 import android.view.Gravity;
 import android.view.View;
@@ -14,15 +15,21 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONArray;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private final Handler handler = new Handler();
     private LinearLayout content, indicatorRow, tabBar;
-    private TextView status, lockBanner;
+    private TextView status, lockBanner, systemInfo;
     private JSONObject policy;
     private String group = "overview";
     private boolean busy = false;
+    private final Runnable clockTicker = new Runnable() {
+        @Override public void run() { updateSystemInfo(); handler.postDelayed(this, 30000L); }
+    };
 
     private static final int BG = 0xfff7f6f2;
     private static final int CARD = 0xffffffff;
@@ -92,7 +99,7 @@ public class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(20), dp(26), dp(20), dp(14));
+        header.setPadding(dp(20), dp(34), dp(20), dp(14));
         header.setBackgroundColor(BG);
 
         LinearLayout brand = new LinearLayout(this);
@@ -102,9 +109,11 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         brand.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
 
-        TextView version = text("re3a  •  0.2", 11, MUTED);
-        version.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        brand.addView(version, new LinearLayout.LayoutParams(dp(90), dp(36)));
+        systemInfo = text("", 11, MUTED);
+        systemInfo.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        systemInfo.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        brand.addView(systemInfo, new LinearLayout.LayoutParams(dp(112), dp(36)));
+        updateSystemInfo();
         header.addView(brand);
 
         status = text("●  Offline", 13, RED);
@@ -157,6 +166,22 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         highlightTab();
+        handler.postDelayed(clockTicker, 30000L);
+    }
+
+    private void updateSystemInfo() {
+        int level = -1;
+        try {
+            android.content.Intent battery = registerReceiver(null, new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+            if (battery != null) {
+                int current = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+                if (current >= 0 && scale > 0) level = Math.round(current * 100f / scale);
+            }
+        } catch (Exception ignored) {}
+        String battery = level >= 0 ? level + "%" : "—";
+        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+        if (systemInfo != null) systemInfo.setText(time + "  •  " + battery);
     }
 
     private void setInitialIndicators() {
@@ -195,7 +220,7 @@ public class MainActivity extends Activity {
         box.setPadding(dp(16), dp(15), dp(16), dp(16));
         box.setBackground(bg(CARD, BORDER, 18));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(7), 0, dp(7));
+        p.setMargins(0, dp(5), 0, dp(5));
         content.addView(box, p);
 
         TextView a = text(title, 19, TEXT);
@@ -501,9 +526,9 @@ public class MainActivity extends Activity {
                     busy = false;
                     render();
                     if (err != null && !err.isEmpty()) {
-                        content.addView(text("Connect: " + err, 11, RED));
+                        addLogBox("Connect: " + err);
                     } else {
-                        content.addView(text("Connection did not become ready. Open Termux and verify Run commands in Termux plus allow-external-apps.", 11, RED));
+                        addLogBox("Connection did not become ready. Open Termux and verify Run commands in Termux plus allow-external-apps.");
                     }
                     return;
                 }
@@ -561,7 +586,18 @@ public class MainActivity extends Activity {
         status.setTextColor(RED);
         render();
         String detail = getSharedPreferences("bridge", MODE_PRIVATE).getString("last_error", "");
-        content.addView(text(detail == null || detail.isEmpty() ? message : detail, 11, RED));
+        String log = detail == null || detail.isEmpty() ? message : detail;
+        addLogBox(log);
+    }
+
+    private void addLogBox(String message) {
+        addCard("Log", "Connection / bridge output  •  long-press to copy");
+        TextView log = text(message == null || message.isEmpty() ? "No details." : message, 12, TEXT);
+        log.setTextIsSelectable(true);
+        log.setGravity(Gravity.TOP | Gravity.START);
+        log.setPadding(dp(12), dp(12), dp(12), dp(12));
+        log.setBackground(bg(0xfffaf9f6, BORDER, 12));
+        content.addView(log, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void syncPolicyAndStatus() {
