@@ -139,15 +139,15 @@ public class ConnectionMonitorService extends Service {
                 this, 4205, exit,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        String ready = "● READY";
-        String notReady = "○ NOT READY";
-        String body = "MCP " + (mcpReady ? ready : notReady)
-                + "   •   Proxy " + (proxyReady ? ready : notReady)
-                + "   •   Tunnel " + (tunnelReady ? ready : notReady);
+        String top = "MCP            Proxy            Tunnel";
+        String bottom = (mcpReady ? "🟢" : "🔴")
+                + "              " + (proxyReady ? "🟢" : "🔴")
+                + "              " + (tunnelReady ? "🟢" : "🔴");
+        String body = top + "\n" + bottom;
 
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
-                .setContentText(body)
+                .setContentText(top + "  " + bottom)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
                 .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setContentIntent(contentIntent)
