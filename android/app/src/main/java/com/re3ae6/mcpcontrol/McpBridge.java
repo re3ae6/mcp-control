@@ -27,7 +27,10 @@ public final class McpBridge {
         bridgeArgs[args.length] = "__MCP_CONTROL_TOKEN__=" + token;
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
 
-        Intent result = new Intent(context, PluginResultsReceiver.class);
+        // Termux returns RUN_COMMAND results through the PendingIntent's target
+        // service. Keep the custom wrapper broadcasts on PluginResultsReceiver;
+        // the actual Termux result must target PluginResultsService.
+        Intent result = new Intent(context, PluginResultsService.class);
         result.putExtra("mcp_control_command", command);
         result.putExtra("mcp_control_pending", true);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
