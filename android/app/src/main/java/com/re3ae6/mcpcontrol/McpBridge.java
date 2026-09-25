@@ -13,8 +13,6 @@ public final class McpBridge {
     public static boolean run(Context context, String... args) {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
-        // The callback wrapper is intentionally invoked through bash because the GitHub
-        // contents API preserves the wrapper as a regular text file on the device.
         i.putExtra("com.termux.RUN_COMMAND_PATH",
                 "/data/data/com.termux/files/usr/bin/bash");
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
@@ -29,13 +27,15 @@ public final class McpBridge {
         bridgeArgs[args.length + 1] = "__MCP_CONTROL_TOKEN__=" + token;
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
 
-        Intent result = new Intent(context, PluginResultsActivity.class);
+        Intent result = new Intent(context, PluginResultsReceiver.class);
         result.putExtra("mcp_control_command", command);
+        result.putExtra("mcp_control_pending", true);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
         int flags = PendingIntent.FLAG_ONE_SHOT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
-                PendingIntent.getActivity(context, code, result, flags));
+                PendingIntent.getBroadcast(context, code, result, flags));
+
         long sentAt = System.currentTimeMillis();
         context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
                 .putString("sent_command", command)

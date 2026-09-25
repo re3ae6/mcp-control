@@ -23,18 +23,20 @@ public class PluginResultsReceiver extends BroadcastReceiver {
         if (command == null || command.isEmpty()) {
             command = intent.getStringExtra("com.re3ae6.mcpcontrol.COMMAND");
         }
+        boolean pendingResult = intent.getBooleanExtra("mcp_control_pending", false);
         String token = intent.getStringExtra("com.re3ae6.mcpcontrol.TOKEN");
         String stage = intent.getStringExtra("com.re3ae6.mcpcontrol.STAGE");
 
-        if (command == null || command.isEmpty() || token == null || token.isEmpty()) {
+        if (command == null || command.isEmpty()) {
             diagnostic.putString("callback_state", "callback_missing_identity")
                     .putString("callback_stage", stage == null ? "" : stage).apply();
             return;
         }
 
         String expected = prefs.getString("callback_token_" + command, "");
-        if (expected.isEmpty() || !expected.equals(token)) {
-            diagnostic.putString("callback_state", "callback_token_mismatch")
+        if (!pendingResult && (token == null || token.isEmpty() || expected.isEmpty() || !expected.equals(token))) {
+            diagnostic.putString("callback_state", token == null || token.isEmpty()
+                            ? "callback_missing_token" : "callback_token_mismatch")
                     .putString("callback_command", command)
                     .putString("callback_stage", stage == null ? "" : stage).apply();
             return;
