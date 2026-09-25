@@ -162,8 +162,11 @@ public class MainActivity extends Activity {
         String json = prefs.getString("monitor_status_json", "");
         try {
             JSONObject o = new JSONObject(json);
-            if (o.has("connected")) {
-                connectionOk = o.optBoolean("connected");
+            if (o.has("mcp") || o.has("proxy") || o.has("tunnel")) {
+                boolean m = isMcpReady(o);
+                boolean p = isProxyReady(o);
+                boolean t = isTunnelReady(o);
+                connectionOk = m && p && t;
                 lastConnectionStatus = o;
                 status.setText("●  " + (connectionOk ? "Connected" : "Disconnected"));
                 status.setTextColor(connectionOk ? GREEN : RED);
@@ -489,13 +492,19 @@ public class MainActivity extends Activity {
         if ("overview".equals(group)) {
             addSectionHeader("System Overview", "Secure local controller");
             addMasterBanner(locked);
-            if (connectionOk && lastConnectionStatus != null) {
-                addBridgeConnectionCard(
-                        "OK".equalsIgnoreCase(lastConnectionStatus.optString("mcp")),
-                        "OK".equalsIgnoreCase(lastConnectionStatus.optString("proxy")),
-                        lastConnectionStatus.optString("tunnel", "").toLowerCase().contains("live")
-                                || lastConnectionStatus.optString("tunnel", "").toLowerCase().contains("ready"));
+            JSONObject bridgeStatus = lastConnectionStatus;
+            if (bridgeStatus == null) {
+                try {
+                    String cached = getSharedPreferences("bridge", MODE_PRIVATE)
+                            .getString("monitor_status_json", "");
+                    if (cached != null && !cached.isEmpty()) bridgeStatus = new JSONObject(cached);
+                } catch (Exception ignored) {}
             }
+            addBridgeConnectionCard(
+                    bridgeStatus != null && isMcpReady(bridgeStatus),
+                    bridgeStatus != null && isProxyReady(bridgeStatus),
+                    bridgeStatus != null && isTunnelReady(bridgeStatus));
+            addMonitorDiagnosticsCard();
 
             addSectionHeader("Policy", "Effective capability states");
             LinearLayout counts = new LinearLayout(this);
@@ -639,13 +648,55 @@ public class MainActivity extends Activity {
 
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
 
+    private boolean isMcpReady(JSONObject o) {
+        return "OK".equalsIgnoreCase(o.optString("mcp")) || o.optBoolean("mcp_ok", false);
+    }
+
+    private boolean isProxyReady(JSONObject o) {
+        return "OK".equalsIgnoreCase(o.optString("proxy")) || o.optBoolean("proxy_ok", false);
+    }
+
+    private boolean isTunnelReady(JSONObject o) {
+        String ts = o.optString("tunnel", "").toLowerCase();
+        return ts.contains("live") || ts.contains("ready") || o.optBoolean("tunnel_ok", false);
+    }
+
     private void updateIndicators(JSONObject o) {
         indicatorRow.removeAllViews();
-        boolean m="OK".equalsIgnoreCase(o.optString("mcp")) || o.optBoolean("mcp_ok",false);
-        boolean p="OK".equalsIgnoreCase(o.optString("proxy")) || o.optBoolean("proxy_ok",false);
-        String ts=o.optString("tunnel","").toLowerCase();
-        boolean t=ts.contains("live") || ts.contains("ready") || o.optBoolean("tunnel_ok",false);
-        addIndicator("MCP",m); addIndicator("Proxy",p); addIndicator("Tunnel",t);
+        addIndicator("MCP", isMcpReady(o));
+        addIndicator("Proxy", isProxyReady(o));
+        addIndicator("Tunnel", isTunnelReady(o));
+    }
+
+    private void addMonitorDiagnosticsCard() {
+        addSectionHeader("Diagnostics", "Latest bridge/monitor state");
+        android.content.SharedPreferences p = getSharedPreferences("bridge", MODE_PRIVATE);
+        String event = p.getString("monitor_last_event", "No monitor event yet.");
+        long at = p.getLong("monitor_last_event_at", 0L);
+        String callback = p.getString("callback_state_status", "unknown");
+        String stage = p.getString("callback_stage_status", "");
+        long sent = p.getLong("sent_at_status", 0L);
+        long received = p.getLong("received_at_status", 0L);
+        String err = commandError("status");
+
+        StringBuilder d = new StringBuilder()
+                .append(event)
+                .append("\\ncallback: ").append(callback)
+                .append(stage.isEmpty() ? "" : " / " + stage)
+                .append("\\nsent: ").append(sent)
+                .append("  received: ").append(received);
+        if (at > 0L) d.append("\\nevent_at: ").append(at);
+        if (!err.isEmpty()) d.append("\\nerror: ").append(err);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(12), dp(14), dp(12));
+        box.setBackground(bg(CARD_SOFT, BORDER, 16));
+        TextView t = text(d.toString(), 10, TEXT);
+        t.setGravity(Gravity.TOP | Gravity.START);
+        t.setTextIsSelectable(true);
+        box.addView(t);
+        content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void clearOutput() {
@@ -767,27 +818,51 @@ public class MainActivity extends Activity {
     }
 
     private boolean applyStatusResult() {
-        String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_status", "");
-        String err = getSharedPreferences("bridge", MODE_PRIVATE).getString("stderr_status", "");
-        int exit = getSharedPreferences("bridge", MODE_PRIVATE).getInt("exit_status", -1);
+        android.content.SharedPreferences p = getSharedPreferences("bridge", MODE_PRIVATE);
+        String out = p.getString("stdout_status", "");
+        String err = p.getString("stderr_status", "");
+        int exit = p.getInt("exit_status", -1);
         try {
             JSONObject o = new JSONObject(out);
-            if (o.has("connected")) {
-                boolean ok = o.optBoolean("connected");
+            if (o.has("mcp") || o.has("proxy") || o.has("tunnel") || o.has("connected")) {
+                boolean m = isMcpReady(o);
+                boolean pr = isProxyReady(o);
+                boolean t = isTunnelReady(o);
+                boolean ok = m && pr && t;
                 connectionOk = ok;
                 lastConnectionStatus = o;
                 status.setText("●  " + (ok ? "Connected" : "Disconnected"));
                 status.setTextColor(ok ? GREEN : RED);
                 updateIndicators(o);
+                p.edit()
+                        .putBoolean("monitor_connected", ok)
+                        .putLong("monitor_received_at", System.currentTimeMillis())
+                        .putString("monitor_status_json", o.toString())
+                        .putString("monitor_state", "activity_status_ok")
+                        .putString("monitor_last_event",
+                                "Activity status: MCP " + (m ? "OK" : "DOWN")
+                                        + " / Proxy " + (pr ? "OK" : "DOWN")
+                                        + " / Tunnel " + (t ? "LIVE" : "DOWN"))
+                        .putLong("monitor_last_event_at", System.currentTimeMillis())
+                        .apply();
+                requestNotificationStatusSync(o);
                 return ok;
             }
         } catch (Exception ignored) {}
-        if (err != null && !err.isEmpty()) status.setText("●  Bridge Error");
-        else if (exit != 0) status.setText("●  Disconnected");
-        status.setTextColor(RED);
-        connectionOk = false;
-        lastConnectionStatus = null;
-        return false;
+
+        // A missing/late callback is not a disconnect. Preserve the last known good state.
+        if (exit == -1 && (err == null || err.isEmpty())) return connectionOk;
+        return connectionOk;
+    }
+
+    private void requestNotificationStatusSync(JSONObject o) {
+        try {
+            Intent i = new Intent(this, ConnectionMonitorService.class)
+                    .setAction(ConnectionMonitorService.ACTION_STATUS_UPDATE)
+                    .putExtra("status_json", o.toString());
+            if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+        } catch (RuntimeException ignored) {}
     }
 
     private void loadPolicyAndFinish() {
