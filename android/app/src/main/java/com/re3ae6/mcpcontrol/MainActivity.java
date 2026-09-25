@@ -5,9 +5,6 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.Window;
-import android.view.WindowInsets;
-import android.view.ViewGroup;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.view.Gravity;
@@ -89,7 +86,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         buildUi();
         renderOffline();
     }
@@ -114,7 +111,12 @@ public class MainActivity extends Activity {
 
         TextView title = text("MCP Control", 25, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        brand.addView(title, new LinearLayout.LayoutParams(-1, dp(36)));
+        brand.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
+
+        TextView signature = text("re3a  •  v0.2.0", 11, MUTED);
+        signature.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        signature.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        brand.addView(signature, new LinearLayout.LayoutParams(dp(112), dp(36)));
         header.addView(brand);
 
         status = text("●  Offline", 13, RED);
