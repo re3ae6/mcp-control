@@ -209,6 +209,11 @@ The control plane is complete only when:
 - The next implementation step is to make each of the eight areas expose concrete, correctly mapped actions rather than policy-only rows.
 
 ## 18. Latest UI Fixes
+- Reworked the Android UI into a light/cream, spacious security-dashboard layout with rounded controls, card-based hierarchy, clean alignment, and English labels for reliable rendering.
+- Removed the CI dependency on the external `MCP_CONTROL_Android_Icons.zip`; the launcher now uses the bundled vector drawable directly.
+- Fixed Android Java compilation failure in metric cards by returning real `View` objects instead of extracting them through `getTag()`.
+- GitHub Actions workflow retains both automatic `push` builds and manual `workflow_dispatch` builds.
+
 - Fixed Android bridge source formatting/build issue.
 - Fixed connection-status field mismatch that caused false red indicators.
 - Fixed action busy-state handling so delayed refreshes are not permanently blocked.
