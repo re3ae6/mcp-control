@@ -13,17 +13,20 @@ public final class McpBridge {
     public static boolean run(Context context, String... args) {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
+        // The callback wrapper is intentionally invoked through bash because the GitHub
+        // contents API preserves the wrapper as a regular text file on the device.
         i.putExtra("com.termux.RUN_COMMAND_PATH",
-                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh");
+                "/data/data/com.termux/files/usr/bin/bash");
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
 
         String command = args.length == 0 ? "" : args[0];
         String token = UUID.randomUUID().toString();
-        String[] bridgeArgs = new String[args.length + 1];
-        System.arraycopy(args, 0, bridgeArgs, 0, args.length);
-        bridgeArgs[args.length] = "__MCP_CONTROL_TOKEN__=" + token;
+        String[] bridgeArgs = new String[args.length + 2];
+        bridgeArgs[0] = "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh";
+        System.arraycopy(args, 0, bridgeArgs, 1, args.length);
+        bridgeArgs[args.length + 1] = "__MCP_CONTROL_TOKEN__=" + token;
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
 
         Intent result = new Intent(context, PluginResultsActivity.class);
