@@ -10,6 +10,8 @@ import android.os.Handler;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -625,7 +627,12 @@ public class MainActivity extends Activity {
     }
 
     private void addLogBox(String message) {
-        TextView log = text(message == null || message.isEmpty() ? "No details." : message, 12, TEXT);
+        String finalMessage = message == null || message.isEmpty() ? "No details." : message;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("MCP Control diagnostic", finalMessage));
+        }
+        TextView log = text(finalMessage, 12, TEXT);
         log.setTextIsSelectable(true);
         log.setGravity(Gravity.TOP | Gravity.START);
         log.setPadding(dp(12), dp(12), dp(12), dp(12));
