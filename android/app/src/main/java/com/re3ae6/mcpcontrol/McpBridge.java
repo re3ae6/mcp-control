@@ -28,10 +28,18 @@ public final class McpBridge {
                 PendingIntent.getService(context, code, result, flags));
         try {
             context.startService(i);
+            context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
+                    .putString("last_error", "")
+                    .putLong("last_error_at", 0L)
+                    .apply();
             return true;
         } catch (RuntimeException e) {
+            String detail = e.getClass().getSimpleName();
+            if (e.getMessage() != null && !e.getMessage().isEmpty()) {
+                detail += ": " + e.getMessage();
+            }
             context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
-                    .putString("last_error", "Termux bridge: " + String.valueOf(e.getMessage()))
+                    .putString("last_error", "Termux bridge: " + detail)
                     .putLong("last_error_at", System.currentTimeMillis())
                     .apply();
             return false;
