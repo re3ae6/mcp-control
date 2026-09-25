@@ -10,6 +10,7 @@ from core.capability_map import (
     TOOL_CAPABILITIES,
     TOOL_SECONDARY_CAPABILITIES,
     AREA_TOOL_ACTIONS,
+    CONTROL_ONLY_CAPABILITIES,
     capability_for_tool,
     git_capability_for_command,
 )
@@ -160,15 +161,7 @@ class SecurityMatrixTests(unittest.TestCase):
             "files.repo_reports", "files.repo_tmp", "files.tunnel_install",
             "files.home", "files.shared_storage", "files.custom",
         })
-        reserved = {
-            "git.delete",
-            "terminal.bash", "terminal.python", "terminal.kill", "terminal.install",
-            "terminal.chmod", "terminal.env",
-            "network.local_8081", "network.local_18080", "network.local_18081",
-            "network.tunnel", "network.openai", "network.other",
-            "device.shared_storage", "device.microphone", "device.contacts", "device.other",
-            "dangerous.chmod",
-        }
+        reserved = CONTROL_ONLY_CAPABILITIES
         self.assertEqual(operational | reserved, ids)
         self.assertTrue(operational.isdisjoint(reserved))
 
