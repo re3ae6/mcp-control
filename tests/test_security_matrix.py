@@ -175,7 +175,19 @@ class SecurityMatrixTests(unittest.TestCase):
         operational.update(cap for caps in TOOL_SECONDARY_CAPABILITIES.values() for cap in caps)
         self.assertTrue(operational <= ids)
         self.assertEqual(capability_for_tool("not-a-real-tool"), "dangerous.outside_allowlist")
-        self.assertEqual(git_capability_for_command("git status --short"), "git.status")
+        expected_git = {
+            "git pull --rebase origin main": "git.pull",
+            "git status --short": "git.status",
+            "git diff --check": "git.diff",
+            "git add core/policy.py": "git.add",
+            "git commit -m test": "git.commit",
+            "git push origin main": "git.push",
+            "git switch main": "git.branch",
+            "git checkout main": "git.branch",
+            "git branch --show-current": "git.branch",
+        }
+        for command, capability in expected_git.items():
+            self.assertEqual(git_capability_for_command(command), capability)
         self.assertIsNone(git_capability_for_command("echo git status"))
 
 
