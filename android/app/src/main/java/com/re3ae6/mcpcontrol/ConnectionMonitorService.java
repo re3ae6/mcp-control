@@ -19,6 +19,7 @@ public class ConnectionMonitorService extends Service {
     private static final String CHANNEL_ID = "mcp_connection_monitor";
     private static final String ACTION_EXIT = "com.re3ae6.mcpcontrol.EXIT";
     private static final String ACTION_NOOP = "com.re3ae6.mcpcontrol.NOOP";
+    static final String ACTION_STATUS_UPDATE = "com.re3ae6.mcpcontrol.STATUS_UPDATE";
     private static final int NOTIFICATION_ID = 4201;
     private static final long INTERVAL_MS = 10000L;
     private static final long RESULT_WAIT_MS = 1600L;
@@ -44,6 +45,7 @@ public class ConnectionMonitorService extends Service {
         super.onCreate();
         createChannel();
         restoreLastStatus();
+        recordMonitorEvent("Monitor started");
         Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification,
@@ -69,15 +71,47 @@ public class ConnectionMonitorService extends Service {
             String out = getSharedPreferences("bridge", MODE_PRIVATE)
                     .getString("monitor_status_json", "");
             if (out == null || out.isEmpty()) return;
-            JSONObject result = new JSONObject(out);
-            mcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
-                    || result.optBoolean("mcp_ok", false);
-            proxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
-                    || result.optBoolean("proxy_ok", false);
-            String tunnel = result.optString("tunnel", "").toLowerCase();
-            tunnelReady = tunnel.contains("live") || tunnel.contains("ready")
-                    || result.optBoolean("tunnel_ok", false);
+            applyStatusJson(new JSONObject(out), false);
         } catch (Exception ignored) {}
+    }
+
+    private boolean isMcpReady(JSONObject o) {
+        return "OK".equalsIgnoreCase(o.optString("mcp")) || o.optBoolean("mcp_ok", false);
+    }
+
+    private boolean isProxyReady(JSONObject o) {
+        return "OK".equalsIgnoreCase(o.optString("proxy")) || o.optBoolean("proxy_ok", false);
+    }
+
+    private boolean isTunnelReady(JSONObject o) {
+        String tunnel = o.optString("tunnel", "").toLowerCase();
+        return tunnel.contains("live") || tunnel.contains("ready") || o.optBoolean("tunnel_ok", false);
+    }
+
+    private void applyStatusJson(JSONObject result, boolean notify) {
+        mcpReady = isMcpReady(result);
+        proxyReady = isProxyReady(result);
+        tunnelReady = isTunnelReady(result);
+        boolean connected = mcpReady && proxyReady && tunnelReady;
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("monitor_connected", connected)
+                .putLong("monitor_received_at", System.currentTimeMillis())
+                .putString("monitor_status_json", result.toString())
+                .putString("monitor_state", "ok")
+                .putString("monitor_last_event",
+                        "MCP " + (mcpReady ? "OK" : "DOWN")
+                                + " / Proxy " + (proxyReady ? "OK" : "DOWN")
+                                + " / Tunnel " + (tunnelReady ? "LIVE" : "DOWN"))
+                .putLong("monitor_last_event_at", System.currentTimeMillis())
+                .apply();
+        if (notify) updateNotification();
+    }
+
+    private void recordMonitorEvent(String event) {
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putString("monitor_last_event", event == null ? "" : event)
+                .putLong("monitor_last_event_at", System.currentTimeMillis())
+                .apply();
     }
 
     private void checkConnection() {
@@ -111,28 +145,17 @@ public class ConnectionMonitorService extends Service {
             if (receivedAt >= sentAt && "received".equals(state)) {
                 try {
                     JSONObject result = new JSONObject(out);
-                    if (result.has("connected")) {
-                        boolean connected = result.optBoolean("connected");
-                        boolean newMcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
-                                || result.optBoolean("mcp_ok", false);
-                        boolean newProxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
-                                || result.optBoolean("proxy_ok", false);
-                        String tunnel = result.optString("tunnel", "").toLowerCase();
-                        boolean newTunnelReady = tunnel.contains("live") || tunnel.contains("ready")
-                                || result.optBoolean("tunnel_ok", false);
-                        boolean indicatorChanged = mcpReady != newMcpReady
-                                || proxyReady != newProxyReady
-                                || tunnelReady != newTunnelReady;
-                        mcpReady = newMcpReady;
-                        proxyReady = newProxyReady;
-                        tunnelReady = newTunnelReady;
-                        prefs.edit()
-                                .putBoolean("monitor_connected", connected)
-                                .putLong("monitor_received_at", receivedAt)
-                                .putString("monitor_status_json", result.toString())
-                                .putString("monitor_state", "ok")
-                                .apply();
+                    if (result.has("mcp") || result.has("proxy") || result.has("tunnel") || result.has("connected")) {
+                        boolean oldMcpReady = mcpReady;
+                        boolean oldProxyReady = proxyReady;
+                        boolean oldTunnelReady = tunnelReady;
+                        applyStatusJson(result, false);
+                        boolean indicatorChanged = oldMcpReady != mcpReady
+                                || oldProxyReady != proxyReady
+                                || oldTunnelReady != tunnelReady;
                         if (indicatorChanged) updateNotification();
+                    } else {
+                        recordMonitorEvent("Invalid status response");
                     }
                 } catch (Exception ignored) {}
             }
@@ -150,8 +173,6 @@ public class ConnectionMonitorService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         PendingIntent exitIntent = activityExitIntent();
-        PendingIntent noopIntent = actionIntent(ACTION_NOOP, 4206);
-
         String mcpLight = "●";
         String proxyLight = "●";
         String tunnelLight = "●";
@@ -159,17 +180,11 @@ public class ConnectionMonitorService extends Service {
         RemoteViews small = new RemoteViews(getPackageName(), R.layout.notification_monitor_small);
         setMonitorViews(small, mcpLight, proxyLight, tunnelLight);
         setMonitorLightColors(small);
-        small.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
-        small.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
-        small.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
         small.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         RemoteViews large = new RemoteViews(getPackageName(), R.layout.notification_monitor_large);
         setMonitorViews(large, mcpLight, proxyLight, tunnelLight);
         setMonitorLightColors(large);
-        large.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
-        large.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
-        large.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         return new Notification.Builder(this, CHANNEL_ID)
@@ -240,8 +255,19 @@ public class ConnectionMonitorService extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null) {
             String action = intent.getAction();
-            android.content.SharedPreferences prefs =
-                    getSharedPreferences("bridge", MODE_PRIVATE);
+
+            if (ACTION_STATUS_UPDATE.equals(action)) {
+                String out = intent.getStringExtra("status_json");
+                try {
+                    if (out != null && !out.isEmpty()) {
+                        applyStatusJson(new JSONObject(out), true);
+                        recordMonitorEvent("Notification synced from app");
+                    }
+                } catch (Exception ignored) {
+                    recordMonitorEvent("Notification sync received invalid status");
+                }
+                return START_STICKY;
+            }
 
             if (ACTION_NOOP.equals(action)) {
                 return START_STICKY;
