@@ -14,7 +14,7 @@ public final class McpBridge {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
-                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control.sh");
+                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh");
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
