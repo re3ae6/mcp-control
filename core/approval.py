@@ -172,3 +172,72 @@ def consume(
             return item
 
         raise PermissionError("approval_not_found")
+
+
+def create_bundle(capabilities: list[str], tool: str, params: Any) -> dict[str, Any]:
+    caps = sorted(set(capabilities))
+    if not caps:
+        raise ValueError("approval_bundle_requires_capabilities")
+    policy = load_policy()
+    if any(decision(policy, cap) != "ask" for cap in caps):
+        _audit("approval_bundle_create", "DENY", "policy")
+        raise PermissionError("approval_not_allowed_by_policy")
+    now = _now()
+    item = {
+        "approval_id": secrets.token_urlsafe(24),
+        "capabilities": caps,
+        "tool": tool,
+        "request_digest": request_digest(json.dumps(caps, separators=(",", ":")), tool, params),
+        "created_at": _iso(now),
+        "expires_at": _iso(now + timedelta(seconds=TTL_SECONDS)),
+        "status": "pending",
+        "consumed": False,
+    }
+    with _store_lock():
+        data = _load()
+        data["approvals"].append(item)
+        _save(data)
+    _audit("approval_bundle_create", "ALLOW", item["approval_id"])
+    return item
+
+
+def consume_bundle(
+    approval_id: str,
+    capabilities: list[str],
+    tool: str,
+    params: Any,
+) -> dict[str, Any]:
+    caps = sorted(set(capabilities))
+    if not caps:
+        raise ValueError("approval_bundle_requires_capabilities")
+    with _store_lock():
+        policy = load_policy()
+        if any(decision(policy, cap) != "ask" for cap in caps):
+            _audit("approval_bundle_consume", "DENY", "policy")
+            raise PermissionError("approval_blocked_by_policy")
+        data = _load()
+        digest = request_digest(json.dumps(caps, separators=(",", ":")), tool, params)
+        for item in data["approvals"]:
+            if item["approval_id"] != approval_id:
+                continue
+            if item.get("consumed"):
+                raise PermissionError("approval_already_consumed")
+            if item.get("status") != "approved":
+                raise PermissionError("approval_not_approved")
+            if _now() >= datetime.fromisoformat(item["expires_at"]):
+                item["status"] = "expired"
+                _save(data)
+                raise PermissionError("approval_expired")
+            if (
+                sorted(item.get("capabilities", [])) != caps
+                or item.get("tool") != tool
+                or item.get("request_digest") != digest
+            ):
+                raise PermissionError("approval_request_mismatch")
+            item["consumed"] = True
+            item["status"] = "consumed"
+            item["consumed_at"] = _iso(_now())
+            _save(data)
+            _audit("approval_bundle_consume", "ALLOW", approval_id)
+            return item
+        raise PermissionError("approval_not_found")
