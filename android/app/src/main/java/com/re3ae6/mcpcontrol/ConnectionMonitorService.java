@@ -236,10 +236,14 @@ public class ConnectionMonitorService extends Service {
                 checking = false;
                 handler.removeCallbacks(loop);
 
-                // EXIT only closes this control-panel monitor.
-                // It deliberately does not touch MCP, Proxy, Tunnel, or watchdog.
+                // Close only MCP Control. Do not touch MCP, Proxy, Tunnel, or watchdog.
                 stopForeground(true);
                 stopSelf();
+                Intent close = new Intent(this, MainActivity.class);
+                close.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                close.putExtra("close_from_notification", true);
+                startActivity(close);
                 return START_NOT_STICKY;
             }
         }
