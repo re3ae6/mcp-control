@@ -167,11 +167,6 @@ public class ConnectionMonitorService extends Service {
     private Notification buildNotification() {
         if (Build.VERSION.SDK_INT >= 26) createChannel();
 
-        Intent open = new Intent(this, MainActivity.class);
-        PendingIntent contentIntent = PendingIntent.getActivity(
-                this, 4202, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
         PendingIntent exitIntent = activityExitIntent();
         String mcpLight = "●";
         String proxyLight = "●";
@@ -189,7 +184,6 @@ public class ConnectionMonitorService extends Service {
 
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
-                .setContentIntent(contentIntent)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
