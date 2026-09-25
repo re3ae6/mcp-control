@@ -98,5 +98,5 @@
         android:textColor="#FFFFFFFF"
         android:includeFontPadding="false"
         android:clickable="true"
-        android:contentDescription="Exit MCP Control"/>
+        android:contentDescription="Close MCP Control"/>
 </LinearLayout>
