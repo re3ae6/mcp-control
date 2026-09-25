@@ -255,7 +255,9 @@ public class ConnectionMonitorService extends Service {
                 try {
                     if (out != null && !out.isEmpty()) {
                         applyStatusJson(new JSONObject(out), true);
-                        recordMonitorEvent("Notification synced from app");
+                        recordMonitorEvent("Notification synced: MCP " + (mcpReady ? "OK" : "DOWN")
+                                + " / Proxy " + (proxyReady ? "OK" : "DOWN")
+                                + " / Tunnel " + (tunnelReady ? "LIVE" : "DOWN"));
                     }
                 } catch (Exception ignored) {
                     recordMonitorEvent("Notification sync received invalid status");
