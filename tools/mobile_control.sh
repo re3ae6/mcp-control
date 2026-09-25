@@ -75,6 +75,39 @@ PY
     restart)
       env MCP_FORCE_RESTART=1 MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
       ;;
+    approvals)
+      PYTHONPATH="$REPO" python3 - <<'PY'
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+p=Path.home()/".config"/"mcp-control"/"approvals.json"
+if not p.exists():
+    print(json.dumps({"approvals": []}))
+    raise SystemExit
+try:
+    data=json.loads(p.read_text(encoding="utf-8"))
+except Exception:
+    print(json.dumps({"approvals": []}))
+    raise SystemExit
+now=datetime.now(timezone.utc)
+out=[]
+for item in data.get("approvals",[]):
+    if item.get("status")=="pending" and not item.get("consumed",False):
+        try:
+            if now < datetime.fromisoformat(item["expires_at"]): out.append(item)
+        except Exception: pass
+print(json.dumps({"approvals": out}, ensure_ascii=False))
+PY
+      ;;
+    approve)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import sys
+import json
+from core.approval import approve
+print(json.dumps(approve(sys.argv[1]), ensure_ascii=False))
+PY
+      ;;
     audit)
       PYTHONPATH="$REPO" python3 - <<'PY'
 import json
