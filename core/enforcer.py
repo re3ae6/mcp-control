@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-from .approval import create as create_approval, consume as _consume_approval
+from .approval import create as create_approval, consume as _consume_approval, create_bundle as create_approval_bundle, consume_bundle as _consume_approval_bundle
 from .policy import load_policy, decision
 
 AUDIT_DIR = Path.home() / ".config" / "mcp-control"
