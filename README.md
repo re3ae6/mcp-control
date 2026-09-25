@@ -58,3 +58,15 @@ cd ~/po_recorder && bash tools/connect_mcp.sh
 ```
 
 The connector pulls the latest code first and performs the remaining local startup checks automatically.
+
+
+## Android monitor
+
+The Android foreground monitor keeps the local connection visible while the app is in the background. Its notification intentionally stays compact and native-looking:
+
+- `● MCP`, `● Proxy`, `● Tunnel` readiness indicators.
+- `LOCK` immediately blocks new bridge execution while preserving read-only status/policy visibility.
+- `KILL` stops the monitor and persists the emergency lock until local recovery.
+- `EXIT` stops only the monitor service.
+
+Legacy duplicate launcher assets and unused callback UI/wrapper code are not part of the current Android path.
