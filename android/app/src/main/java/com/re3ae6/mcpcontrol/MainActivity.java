@@ -464,78 +464,65 @@ public class MainActivity extends Activity {
     }
 
     private void render() {
+        showConnectionHeader();
         content.removeAllViews();
-        if (policy == null) { renderOffline(); return; }
-
-        boolean locked = policy.optBoolean("master_lock", true);
         highlightTab();
 
-        if ("overview".equals(group)) {
-            addSectionHeader("System Overview", "Secure local controller");
-            addMasterBanner(locked);
-            JSONObject bridgeStatus = lastConnectionStatus;
-            if (bridgeStatus == null) {
-                try {
-                    String cached = getSharedPreferences("bridge", MODE_PRIVATE)
-                            .getString("monitor_status_json", "");
-                    if (cached != null && !cached.isEmpty()) bridgeStatus = new JSONObject(cached);
-                } catch (Exception ignored) {}
-            }
-            addBridgeConnectionCard(
-                    bridgeStatus != null && isMcpReady(bridgeStatus),
-                    bridgeStatus != null && isProxyReady(bridgeStatus),
-                    bridgeStatus != null && isTunnelReady(bridgeStatus));
-            addMonitorDiagnosticsCard();
+        boolean locked = policy != null && policy.optBoolean("master_lock", true);
 
-            addSectionHeader("Policy", "Effective capability states");
-            LinearLayout counts = new LinearLayout(this);
+        if ("overview".equals(group)) {
+            addConnectionSummary();
+
+            addSectionHeader("Policy", locked ? "MASTER LOCK • effective DENY" : "individual states active");
             int[] c = countStates();
-            counts.addView(metric("DENY", String.valueOf(c[0]), RED), new LinearLayout.LayoutParams(0, dp(76), 1));
-            LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(76), 1);
-            q.setMargins(dp(7), 0, 0, 0);
+            LinearLayout counts = new LinearLayout(this);
+            counts.addView(metric("DENY", String.valueOf(c[0]), RED),
+                    new LinearLayout.LayoutParams(0, dp(44), 1));
+            LinearLayout.LayoutParams q = new LinearLayout.LayoutParams(0, dp(44), 1);
+            q.setMargins(dp(5), 0, 0, 0);
             counts.addView(metric("ASK", String.valueOf(c[1]), YELLOW), q);
-            q = new LinearLayout.LayoutParams(0, dp(76), 1);
-            q.setMargins(dp(7), 0, 0, 0);
+            q = new LinearLayout.LayoutParams(0, dp(44), 1);
+            q.setMargins(dp(5), 0, 0, 0);
             counts.addView(metric("ALLOW", String.valueOf(c[2]), GREEN), q);
             content.addView(counts);
 
-            addSectionHeader("Actions", "Service control");
-            Button start = button("Start MCP", v -> { if (!busy) refresh(); });
-            start.setBackground(bg(CARD, BORDER, 24));
-            content.addView(start, new LinearLayout.LayoutParams(-1, dp(46)));
+            addSectionHeader("Controls", "service");
+            LinearLayout controls = new LinearLayout(this);
+
             Button restart = button("Restart MCP", v -> runAction("restart", 1900));
-            restart.setBackground(bg(CARD, BORDER, 24));
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(46));
-            p.setMargins(0, dp(7), 0, 0);
-            content.addView(restart, p);
+            restart.setBackground(bg(CARD, BORDER, 17));
+            controls.addView(restart, new LinearLayout.LayoutParams(0, dp(38), 1));
 
-            addSectionHeader("Approvals", "Pending one-shot requests");
-            Button approvals = button("Check pending approvals", v -> loadApprovals());
-            approvals.setBackground(bg(CARD, BORDER, 24));
-            LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(46));
-            ap.setMargins(0, dp(7), 0, 0);
-            content.addView(approvals, ap);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, dp(38), 1);
+            cp.setMargins(dp(5), 0, 0, 0);
+            Button approvals = button("Approvals", v -> loadApprovals());
+            approvals.setBackground(bg(CARD, BORDER, 17));
+            controls.addView(approvals, cp);
 
-            Button log = button("View recent audit log", v -> loadAudit());
-            log.setBackground(bg(CARD, BORDER, 24));
-            LinearLayout.LayoutParams lg = new LinearLayout.LayoutParams(-1, dp(46));
-            lg.setMargins(0, dp(7), 0, 0);
-            content.addView(log, lg);
+            cp = new LinearLayout.LayoutParams(0, dp(38), 1);
+            cp.setMargins(dp(5), 0, 0, 0);
+            Button audit = button("Audit", v -> loadAudit());
+            audit.setBackground(bg(CARD, BORDER, 17));
+            controls.addView(audit, cp);
+
+            content.addView(controls);
+            addMonitorDiagnosticsCard();
+            if (pendingApprovals.length() > 0) addPendingApprovalsCard();
             return;
         }
 
-        addSectionHeader(labels[indexOf(group)], "Capability policy  •  default deny");
-        if (locked) addMasterBanner(true);
-
-        JSONObject caps = policy.optJSONObject("capabilities");
+        JSONObject caps = policy == null ? null : policy.optJSONObject("capabilities");
         JSONArray a = caps == null ? null : caps.optJSONArray(group);
-        if (a == null || a.length() == 0) {
-            content.addView(text("No capabilities in this group.", 13, MUTED));
+        int n = a == null ? 0 : a.length();
+
+        addSectionHeader(labels[indexOf(group)],
+                locked ? (n + " permissions • MASTER LOCK") : (n + " permissions"));
+        if (n == 0) {
+            content.addView(text("No capabilities in this group.", 12, MUTED));
             return;
         }
 
-        content.addView(label("Permissions"), new LinearLayout.LayoutParams(-1, dp(28)));
-        for (int i = 0; i < a.length(); i++) {
+        for (int i = 0; i < n; i++) {
             JSONObject x = a.optJSONObject(i);
             if (x != null) addCapabilityRow(x, locked);
         }
