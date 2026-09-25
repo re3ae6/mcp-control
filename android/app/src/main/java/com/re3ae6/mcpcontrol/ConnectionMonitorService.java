@@ -107,7 +107,7 @@ public class ConnectionMonitorService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_sys_data_sync)
+                .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setOngoing(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
