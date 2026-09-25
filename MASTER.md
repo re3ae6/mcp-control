@@ -234,3 +234,14 @@ The control plane is complete only when:
 - Android bridge results are stored per command (status, policy, connect, etc.) to prevent result races.
 - Termux launch failures and returned connection errors are surfaced in the UI instead of being silently swallowed.
 - Termux RunCommand error bundles (`err` / `errmsg`) are captured and correlated per command; stale command results are cleared before each new request.
+
+
+## 20. Android Lifecycle + UI Consolidation
+- The foreground Connection Monitor is the single source of connection truth for MCP / Proxy / Tunnel.
+- MainActivity no longer launches an independent status poll on every resume; it renders the latest monitor snapshot and only performs an explicit bridge connect/refresh when requested.
+- Snapshot freshness is bounded; a stale snapshot is shown as CHECKING rather than incorrectly reported as Connected or Disconnected.
+- Removing the app task from Recents no longer intentionally tears down the monitor service; the foreground service is declared with stopWithTask=false and has defensive restart handling.
+- The notification ⛔ action targets the monitor service directly, disables monitoring, stops the foreground service, and removes the app task.
+- Overview contains one Master Lock control and one Connect / Refresh control; the duplicate in-page Lock and duplicate Connect / Refresh actions were removed.
+- Connection details remain visible as the three MCP / Proxy / Tunnel states, while diagnostics, policy counts, approvals, and audit remain accessible.
+- Capability pages keep every capability id, description/label, and DENY / ASK / ALLOW control while using compact rows instead of large repeated cards.
