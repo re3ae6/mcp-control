@@ -210,7 +210,7 @@ The control plane is complete only when:
 
 ## 18. Latest UI Fixes
 - Reworked the Android UI into a light/cream, spacious security-dashboard layout with rounded controls, card-based hierarchy, clean alignment, and English labels for reliable rendering.
-- Removed the CI dependency on the external `MCP_CONTROL_Android_Icons.zip`; the launcher now uses the bundled vector drawable directly.
+- Android launcher now uses the supplied PNG launcher assets for both android:icon and android:roundIcon; the previous green vector launcher fallback was removed.
 - Fixed Android Java compilation failure in metric cards by returning real `View` objects instead of extracting them through `getTag()`.
 - GitHub Actions workflow retains both automatic `push` builds and manual `workflow_dispatch` builds.
 
@@ -219,3 +219,12 @@ The control plane is complete only when:
 - Fixed action busy-state handling so delayed refreshes are not permanently blocked.
 - Connect / Refresh remains available after connection attempts.
 - MASTER LOCK remains the global effective DENY override.
+
+## 19. Android Connection + Launcher Repair
+- Fixed the launcher manifest so both normal and round launcher icons point to the supplied PNG mipmap assets.
+- Removed the unused green vector launcher fallback resource.
+- Added a narrow Android connect bridge action that starts the existing Termux MCP recovery path with MCP_SKIP_GIT_PULL=1, preventing a UI refresh from pulling or changing the po_recorder checkout.
+- start and restart through the Android bridge also skip Git pulls; restart retains the explicit force-restart behavior.
+- Connect / Refresh now actually invokes the bridge connector, polls real MCP/Proxy/Tunnel status until ready, then loads policy.
+- Android bridge results are stored per command (status, policy, connect, etc.) to prevent result races.
+- Termux launch failures and returned connection errors are surfaced in the UI instead of being silently swallowed.
