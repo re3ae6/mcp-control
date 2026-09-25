@@ -530,17 +530,24 @@ public class MainActivity extends Activity {
                     } else {
                         long connectReceivedAt = bridge.getLong("received_at_connect", 0L);
                         long statusAt = bridge.getLong("received_at_status", 0L);
+                        long connectSentAt = bridge.getLong("sent_at_connect", 0L);
+                        long statusSentAt = bridge.getLong("sent_at_status", 0L);
                         int statusExit = bridge.getInt("exit_status", -1);
                         int statusErrorDetail = bridge.getInt("error_code_status", -1);
                         String statusErr = bridge.getString("error_message_status", "");
+                        String connectState = bridge.getString("callback_state_connect", "unknown");
+                        String statusState = bridge.getString("callback_state_status", "unknown");
                         String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
                         addLogBox("Connect did not become ready.\n"
-                                + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing") + "\n"
+                                + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing")
+                                + " callback=" + connectState
+                                + " sent=" + (connectSentAt > 0 ? "yes" : "no") + "\n"
                                 + "status_result=" + (statusAt > 0 ? "received" : "missing")
+                                + " callback=" + statusState
+                                + " sent=" + (statusSentAt > 0 ? "yes" : "no")
                                 + " exit=" + statusExit + " error=" + statusErrorDetail + "\n"
                                 + detail
                                 + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
-                    }
                     return;
                 }
                 pollConnection(attempt + 1);
