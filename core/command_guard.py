@@ -5,8 +5,9 @@ import os, re, shlex
 from pathlib import Path
 
 ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control"))
+PO_RECORDER_ROOT = Path(os.path.expanduser("~/po_recorder")).resolve()
 BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev")
-DANGEROUS = {"rm", "rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
+DANGEROUS = {"rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
 SHELL_WRAPPERS = {"sh", "bash", "zsh", "fish"}
 INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"}
 CODE_FLAGS = {"-c", "-e", "--eval", "--command"}
@@ -26,6 +27,14 @@ def authorize_command(command: str) -> tuple[bool, str]:
     try: tokens = shlex.split(command, posix=True)
     except ValueError as e: return False, f"invalid shell syntax: {e}"
     if not tokens: return False, "empty command"
+    if Path(tokens[0]).name == "rm":
+        operands = [x for x in tokens[1:] if not x.startswith("-")]
+        if not operands: return False, "rm requires a target"
+        if any(x in tokens[1:] for x in ("-r", "-R", "-rf", "-fr")): return False, "recursive rm requires the dedicated delete capability"
+        for target in operands:
+            if not _looks_like_path(target): return False, "rm target must be explicitly scoped to ~/po_recorder"
+            target_path = Path(os.path.expanduser(target)).resolve()
+            if not (target_path == PO_RECORDER_ROOT or PO_RECORDER_ROOT in target_path.parents): return False, f"rm target outside ~/po_recorder: {target}"
     for i, tok in enumerate(tokens):
         base = Path(tok).name
         if base in SHELL_WRAPPERS and i + 1 < len(tokens) and tokens[i + 1] in {"-c", "-lc", "-ic"}:
