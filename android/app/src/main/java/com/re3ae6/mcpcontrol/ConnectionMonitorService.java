@@ -36,7 +36,7 @@ public class ConnectionMonitorService extends Service {
         Notification notification = buildNotification("Monitoring MCP connection");
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
@@ -139,9 +139,4 @@ public class ConnectionMonitorService extends Service {
         return null;
     }
 
-    @Override public void onTimeout(int startId) {
-        if (Build.VERSION.SDK_INT >= 35) {
-            stopSelf();
-        }
-    }
 }
