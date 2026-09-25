@@ -26,7 +26,7 @@ def file_capabilities_for_path(name,path):
 # through the tool catalog.
 CONTROL_ONLY_CAPABILITIES = {
     "git.delete",
-    "terminal.bash", "terminal.python", "terminal.kill", "terminal.install",
+    "terminal.bash", "terminal.python", "terminal.install",
     "terminal.chmod", "terminal.env",
     "network.local_8081", "network.local_18080", "network.local_18081",
     "network.tunnel", "network.openai", "network.other",
