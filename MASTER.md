@@ -245,3 +245,10 @@ The control plane is complete only when:
 - Overview contains one Master Lock control and one Connect / Refresh control; the duplicate in-page Lock and duplicate Connect / Refresh actions were removed.
 - Connection details remain visible as the three MCP / Proxy / Tunnel states, while diagnostics, policy counts, approvals, and audit remain accessible.
 - Capability pages keep every capability id, description/label, and DENY / ASK / ALLOW control while using compact rows instead of large repeated cards.
+
+
+## 21. Connection Truth / Background Monitoring
+- ConnectionMonitorService continues checking MCP / Proxy / Tunnel while MainActivity is visible; Activity performs no independent status command on resume.
+- MainActivity has a local one-second UI ticker that reads the monitor snapshot only; it does not create a second connection or status channel.
+- Snapshot age is explicit. A stale snapshot is rendered as CHECKING rather than silently preserving an old Connected/Disconnected label.
+- Notification connection lights are freshness-aware: green/red represent a fresh snapshot; yellow represents an unknown/stale snapshot.
