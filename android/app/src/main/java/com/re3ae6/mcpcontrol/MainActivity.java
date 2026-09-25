@@ -302,7 +302,7 @@ public class MainActivity extends Activity {
             content.addView(counts);
 
             addCard("Actions", "Service control");
-            Button start = button("Start MCP", v -> runAction("start", 1600));
+            Button start = button("Start MCP", v -> { if (!busy) refresh(); });
             start.setBackground(bg(CARD, BORDER, 24));
             content.addView(start, new LinearLayout.LayoutParams(-1, dp(46)));
             Button restart = button("Restart MCP", v -> runAction("restart", 1900));
@@ -430,42 +430,123 @@ public class MainActivity extends Activity {
     }
 
     private void refresh() {
-        if(busy)return;
-        busy=true;
+        if (busy) return;
+        busy = true;
         status.setText("●  Connecting…");
         status.setTextColor(YELLOW);
         clearOutput();
-        McpBridge.run(this,"policy");
-        handler.postDelayed(this::readPolicy,900);
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putString("stderr_connect", "")
+                .putString("stdout_connect", "")
+                .putInt("exit_connect", -1)
+                .apply();
+
+        if (!McpBridge.run(this, "connect")) {
+            bridgeFailure("Could not start the Termux bridge. Check Termux permission: Run commands in Termux.");
+            return;
+        }
+        pollConnection(0);
     }
 
-    private void readPolicy() {
-        String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
-        try { JSONObject o=new JSONObject(out); if(o.has("master_lock")) policy=o; } catch(Exception ignored) {}
-        clearOutput();
-        McpBridge.run(this,"status");
-        handler.postDelayed(this::readStatus,900);
-    }
-
-    private void readStatus() {
-        String out=getSharedPreferences("bridge",MODE_PRIVATE).getString("stdout","");
-        String err=getSharedPreferences("bridge",MODE_PRIVATE).getString("stderr","");
-        int exit=getSharedPreferences("bridge",MODE_PRIVATE).getInt("exit",-1);
-        boolean parsed=false;
-        try {
-            JSONObject o=new JSONObject(out);
-            if(o.has("connected")) {
-                parsed=true;
-                boolean ok=o.optBoolean("connected");
-                status.setText("●  "+(ok?"Connected":"Disconnected"));
-                status.setTextColor(ok?GREEN:RED);
-                updateIndicators(o);
+    private void pollConnection(int attempt) {
+        long delay = attempt == 0 ? 1200L : 2000L;
+        handler.postDelayed(() -> {
+            clearOutput();
+            if (!McpBridge.run(this, "status")) {
+                bridgeFailure("Could not query Termux. Check Termux permission: Run commands in Termux.");
+                return;
             }
-        } catch(Exception ignored) {}
-        busy=false;
+            handler.postDelayed(() -> {
+                boolean connected = applyStatusResult();
+                if (connected) {
+                    loadPolicyAndFinish();
+                    return;
+                }
+                if (attempt >= 34) {
+                    String err = getSharedPreferences("bridge", MODE_PRIVATE)
+                            .getString("stderr_connect", "");
+                    busy = false;
+                    render();
+                    if (err != null && !err.isEmpty()) {
+                        content.addView(text("Connect: " + err, 11, RED));
+                    } else {
+                        content.addView(text("Connection did not become ready. Open Termux and verify Run commands in Termux plus allow-external-apps.", 11, RED));
+                    }
+                    return;
+                }
+                pollConnection(attempt + 1);
+            }, 550L);
+        }, delay);
+    }
+
+    private boolean applyStatusResult() {
+        String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
+        String err = getSharedPreferences("bridge", MODE_PRIVATE).getString("stderr", "");
+        int exit = getSharedPreferences("bridge", MODE_PRIVATE).getInt("exit", -1);
+        try {
+            JSONObject o = new JSONObject(out);
+            if (o.has("connected")) {
+                boolean ok = o.optBoolean("connected");
+                status.setText("●  " + (ok ? "Connected" : "Disconnected"));
+                status.setTextColor(ok ? GREEN : RED);
+                updateIndicators(o);
+                return ok;
+            }
+        } catch (Exception ignored) {}
+        if (err != null && !err.isEmpty()) status.setText("●  Bridge Error");
+        else if (exit != 0) status.setText("●  Disconnected");
+        status.setTextColor(RED);
+        return false;
+    }
+
+    private void loadPolicyAndFinish() {
+        clearOutput();
+        if (!McpBridge.run(this, "policy")) {
+            bridgeFailure("Connected, but the policy query could not be started.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
+            try {
+                JSONObject o = new JSONObject(out);
+                if (o.has("master_lock")) policy = o;
+            } catch (Exception ignored) {}
+            busy = false;
+            render();
+        }, 650L);
+    }
+
+    private void bridgeFailure(String message) {
+        busy = false;
+        status.setText("●  Disconnected");
+        status.setTextColor(RED);
         render();
-        if(!parsed && err.length()>0) content.addView(text("Bridge: "+err,11,RED));
-        else if(!parsed && exit!=0) content.addView(text("Bridge did not return a valid status.",11,RED));
+        content.addView(text(message, 11, RED));
+    }
+
+    private void syncPolicyAndStatus() {
+        clearOutput();
+        if (!McpBridge.run(this, "policy")) {
+            bridgeFailure("Policy query could not be started.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
+            try {
+                JSONObject o = new JSONObject(out);
+                if (o.has("master_lock")) policy = o;
+            } catch (Exception ignored) {}
+            clearOutput();
+            if (!McpBridge.run(this, "status")) {
+                bridgeFailure("Status query could not be started.");
+                return;
+            }
+            handler.postDelayed(() -> {
+                applyStatusResult();
+                busy = false;
+                render();
+            }, 550L);
+        }, 650L);
     }
 
     private void runSet(String id,String n) {
@@ -475,7 +556,7 @@ public class MainActivity extends Activity {
         status.setTextColor(YELLOW);
         clearOutput();
         McpBridge.run(this,"set",id,n);
-        handler.postDelayed(()->{busy=false;refresh();},1100);
+        handler.postDelayed(()->{syncPolicyAndStatus();},1100);
     }
 
     private void runAction(String a,int d) {
@@ -485,7 +566,7 @@ public class MainActivity extends Activity {
         status.setTextColor(YELLOW);
         clearOutput();
         McpBridge.run(this,a);
-        handler.postDelayed(()->{busy=false;refresh();},d);
+        handler.postDelayed(()->{syncPolicyAndStatus();},d);
     }
 
     private void lockAll() {
@@ -495,7 +576,7 @@ public class MainActivity extends Activity {
         status.setTextColor(YELLOW);
         clearOutput();
         McpBridge.run(this,"lock");
-        handler.postDelayed(()->{busy=false;refresh();},900);
+        handler.postDelayed(()->{syncPolicyAndStatus();},900);
     }
 
     private void unlockAll() {
