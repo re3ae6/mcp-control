@@ -528,16 +528,16 @@ public class MainActivity extends Activity {
                     if (err != null && !err.isEmpty()) {
                         addLogBox("Connect: " + err);
                     } else {
-                        long connectAt = bridge.getLong("received_at_connect", 0L);
+                        long connectReceivedAt = bridge.getLong("received_at_connect", 0L);
                         long statusAt = bridge.getLong("received_at_status", 0L);
                         int statusExit = bridge.getInt("exit_status", -1);
-                        int statusError = bridge.getInt("error_code_status", -1);
+                        int statusErrorDetail = bridge.getInt("error_code_status", -1);
                         String statusErr = bridge.getString("error_message_status", "");
                         String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
                         addLogBox("Connect did not become ready.\n"
-                                + "connect_result=" + (connectAt > 0 ? "received" : "missing") + "\n"
+                                + "connect_result=" + (connectReceivedAt > 0 ? "received" : "missing") + "\n"
                                 + "status_result=" + (statusAt > 0 ? "received" : "missing")
-                                + " exit=" + statusExit + " error=" + statusError + "\n"
+                                + " exit=" + statusExit + " error=" + statusErrorDetail + "\n"
                                 + detail
                                 + "\nCheck Termux permission: Run commands in Termux, allow-external-apps=true.");
                     }
