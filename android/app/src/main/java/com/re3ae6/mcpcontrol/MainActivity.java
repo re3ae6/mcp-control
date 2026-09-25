@@ -127,7 +127,6 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences bridge =
                 getSharedPreferences("bridge", MODE_PRIVATE);
         if (bridge.getBoolean("emergency_killed", false)) return;
-        if (bridge.getBoolean("monitor_exit_requested", false)) return;
         try {
             Intent i = new Intent(this, ConnectionMonitorService.class);
             if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -664,9 +663,6 @@ public class MainActivity extends Activity {
 
     private void refresh() {
         if (busy) return;
-        getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putBoolean("monitor_exit_requested", false)
-                .apply();
         busy = true;
         status.setText("●  Connecting…");
         status.setTextColor(YELLOW);
