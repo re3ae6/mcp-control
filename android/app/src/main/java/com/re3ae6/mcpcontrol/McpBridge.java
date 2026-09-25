@@ -14,7 +14,7 @@ public final class McpBridge {
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
-                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control_bridge.sh");
+                "/data/data/com.termux/files/home/mcp-control/tools/mobile_control.sh");
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
@@ -27,9 +27,6 @@ public final class McpBridge {
         bridgeArgs[args.length] = "__MCP_CONTROL_TOKEN__=" + token;
         i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
 
-        // Termux returns RUN_COMMAND results through the PendingIntent's target
-        // service. Keep the custom wrapper broadcasts on PluginResultsReceiver;
-        // the actual Termux result must target PluginResultsService.
         Intent result = new Intent(context, PluginResultsService.class);
         result.putExtra("mcp_control_command", command);
         result.putExtra("mcp_control_pending", true);
