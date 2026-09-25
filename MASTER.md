@@ -228,3 +228,4 @@ The control plane is complete only when:
 - Connect / Refresh now actually invokes the bridge connector, polls real MCP/Proxy/Tunnel status until ready, then loads policy.
 - Android bridge results are stored per command (status, policy, connect, etc.) to prevent result races.
 - Termux launch failures and returned connection errors are surfaced in the UI instead of being silently swallowed.
+- Termux RunCommand error bundles (`err` / `errmsg`) are captured and correlated per command; stale command results are cleared before each new request.
