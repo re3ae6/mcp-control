@@ -61,7 +61,6 @@ public class MainActivity extends Activity {
     private static final int RUN_COMMAND_PERMISSION_REQUEST = 4101;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;
     private static final long CONNECTION_FRESH_MS = 20000L;
-    private static final long CONNECTION_FRESH_MS = 20000L;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
 
