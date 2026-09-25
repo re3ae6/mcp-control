@@ -750,4 +750,5 @@ public class MainActivity extends Activity {
     }
 }
 
+// Command callbacks are emitted by the executable mobile_control.sh dispatcher.
 // CI trigger: connection diagnostic branch is syntactically closed.
