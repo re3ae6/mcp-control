@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      PYTHONPATH: ${{ github.workspace }}
     defaults:
       run:
         working-directory: android
