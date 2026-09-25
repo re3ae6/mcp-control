@@ -21,6 +21,19 @@ def file_capabilities_for_path(name,path):
     return [] if not cap else [cap,file_scope(path)]
 
 
+# Policy capabilities that are intentionally control-only/reserved until a real
+# MCP action exists. They remain visible in the policy UI but are not executable
+# through the tool catalog.
+CONTROL_ONLY_CAPABILITIES = {
+    "git.delete",
+    "terminal.bash", "terminal.python", "terminal.kill", "terminal.install",
+    "terminal.chmod", "terminal.env",
+    "network.local_8081", "network.local_18080", "network.local_18081",
+    "network.tunnel", "network.openai", "network.other",
+    "device.shared_storage", "device.microphone", "device.contacts", "device.other",
+    "dangerous.chmod",
+}
+
 # UI/action catalog: every non-overview area exposes real MCP actions.
 AREA_TOOL_ACTIONS={
     "files":("ls","read","search","context","history","changes_list","write","mkdir"),
