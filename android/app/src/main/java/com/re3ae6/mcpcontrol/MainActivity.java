@@ -27,6 +27,7 @@ public class MainActivity extends Activity {
     private LinearLayout content, indicatorRow, tabBar;
     private ScrollView scrollView;
     private TextView status, lockBanner;
+    private LinearLayout logHost;
     private JSONObject policy;
     private JSONArray pendingApprovals = new JSONArray();
     private String group = "overview";
@@ -176,10 +177,16 @@ public class MainActivity extends Activity {
     }
 
     private void ensureTermuxRunCommandPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= 23 &&
-                checkSelfPermission("com.termux.permission.RUN_COMMAND") != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{"com.termux.permission.RUN_COMMAND"}, RUN_COMMAND_PERMISSION_REQUEST);
-        }
+        // RUN_COMMAND is a Termux-managed Additional Permission, not a normal
+        // Android runtime permission. It must be granted from this app's App Info.
+    }
+
+    private void openTermuxPermissionSettings() {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            i.setData(android.net.Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (RuntimeException ignored) {}
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -189,7 +196,7 @@ public class MainActivity extends Activity {
                 startConnectionMonitor();
                 refresh();
             } else {
-                addLogBox("Termux permission required: allow “Run commands in Termux environment” for MCP Control, then tap Connect / Refresh.");
+                addLogBox("Termux permission required. Open MCP Control → Permissions → Additional permissions → Run commands in Termux environment.");
             }
         }
     }
@@ -403,6 +410,12 @@ public class MainActivity extends Activity {
         q.setMargins(dp(6), 0, 0, 0);
         row.addView(metric("Tunnel", t ? "Live" : "Offline", t ? GREEN : RED), q);
         content.addView(row);
+
+        logHost = new LinearLayout(this);
+        logHost.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams logLp = new LinearLayout.LayoutParams(-1, -2);
+        logLp.setMargins(0, dp(6), 0, 0);
+        content.addView(logHost, logLp);
 
         Button connect = button("Connect / Refresh", v -> refresh());
         connect.setBackground(bg(TEXT, TEXT, 22));
@@ -846,22 +859,41 @@ public class MainActivity extends Activity {
         if (clipboard != null) {
             clipboard.setPrimaryClip(ClipData.newPlainText("MCP Control diagnostic", finalMessage));
         }
+
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(16), dp(14), dp(16), dp(14));
-        box.setBackground(bg(CARD, BORDER, 18));
-        TextView heading = text("Log", 13, TEXT);
+        box.setPadding(dp(14), dp(10), dp(14), dp(10));
+        box.setBackground(bg(CARD_SOFT, BORDER, 16));
+
+        TextView heading = text("Log", 12, TEXT);
         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(24)));
-        TextView log = text(finalMessage, 12, TEXT);
+        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(22)));
+
+        ScrollView logScroll = new ScrollView(this);
+        logScroll.setFillViewport(false);
+        TextView log = text(finalMessage, 11, TEXT);
         log.setTextIsSelectable(true);
         log.setGravity(Gravity.TOP | Gravity.START);
-        log.setPadding(0, dp(8), 0, 0);
-        box.addView(log, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, dp(8), 0, dp(8));
-        content.addView(box, 0, lp);
-        if (scrollView != null) scrollView.post(() -> scrollView.fullScroll(View.FOCUS_UP));
+        log.setPadding(0, dp(4), 0, dp(2));
+        logScroll.addView(log);
+        box.addView(logScroll, new LinearLayout.LayoutParams(-1, dp(86)));
+
+        if (finalMessage.contains("com.termux.permission.RUN_COMMAND") || finalMessage.contains("Run commands in Termux")) {
+            Button settings = button("Open MCP Control permissions", v -> openTermuxPermissionSettings());
+            settings.setBackground(bg(CARD, BORDER, 20));
+            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(38));
+            sp.setMargins(0, dp(7), 0, 0);
+            box.addView(settings, sp);
+        }
+
+        if (logHost != null) {
+            logHost.removeAllViews();
+            logHost.addView(box, new LinearLayout.LayoutParams(-1, -2));
+        } else {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.setMargins(0, dp(6), 0, dp(6));
+            content.addView(box, 0, lp);
+        }
     }
 
     private void syncPolicyAndStatus() {
