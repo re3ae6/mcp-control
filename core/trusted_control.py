@@ -54,10 +54,10 @@ def lock() -> None:
     _audit("lock", "ALLOW")
 
 
-def unlock(confirmation: str) -> None:
-    """Local interactive recovery only; never exposed through dispatch/MCP."""
+def unlock(confirmation: str, local_ui: bool = False) -> None:
+    """Unlock only through an explicit local UI recovery path."""
     import sys
-    if confirmation != "UNLOCK" or not sys.stdin.isatty():
+    if confirmation != "UNLOCK" or not (sys.stdin.isatty() or local_ui):
         _audit("unlock", "DENY", "interactive_confirmation_required")
         raise PermissionError("trusted_control_unlock_requires_local_confirmation")
     policy = load_policy()
