@@ -210,7 +210,9 @@ class SecurityMatrixTests(unittest.TestCase):
             consume.return_value = {"approval_id": "a1"}
             result = module.guarded_call(None, "run", {**params, "approval_id": "a1"})
         self.assertEqual(result, {"ok": True})
-        consume.assert_called_once_with("a1", "terminal.run", "run", params)
+        self.assertEqual(consume.call_count, 2)
+        consume.assert_any_call("a1", "terminal.run", "run", params)
+        consume.assert_any_call("a1", "mcp.execute", "run", params)
         self.assertEqual(module._original.call_count, 1)
 
     def test_guarded_server_tampered_approval_never_executes(self):
