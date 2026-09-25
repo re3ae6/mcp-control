@@ -8,8 +8,9 @@ import android.os.Bundle;
 public class PluginResultsReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         long now = System.currentTimeMillis();
-        android.content.SharedPreferences.Editor diagnostic =
-                context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
+        android.content.SharedPreferences prefs =
+                context.getSharedPreferences("bridge", Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor diagnostic = prefs.edit()
                 .putLong("callback_received_at", now)
                 .putString("callback_transport", "broadcast");
 
@@ -23,14 +24,29 @@ public class PluginResultsReceiver extends BroadcastReceiver {
             command = intent.getStringExtra("com.re3ae6.mcpcontrol.COMMAND");
         }
         String token = intent.getStringExtra("com.re3ae6.mcpcontrol.TOKEN");
+        String stage = intent.getStringExtra("com.re3ae6.mcpcontrol.STAGE");
+
         if (command == null || command.isEmpty() || token == null || token.isEmpty()) {
-            diagnostic.putString("callback_state", "callback_missing_identity").apply();
+            diagnostic.putString("callback_state", "callback_missing_identity")
+                    .putString("callback_stage", stage == null ? "" : stage).apply();
             return;
         }
-        String expected = context.getSharedPreferences("bridge", Context.MODE_PRIVATE)
-                .getString("callback_token_" + command, "");
+
+        String expected = prefs.getString("callback_token_" + command, "");
         if (expected.isEmpty() || !expected.equals(token)) {
-            diagnostic.putString("callback_state", "callback_token_mismatch").apply();
+            diagnostic.putString("callback_state", "callback_token_mismatch")
+                    .putString("callback_command", command)
+                    .putString("callback_stage", stage == null ? "" : stage).apply();
+            return;
+        }
+
+        if ("started".equals(stage)) {
+            prefs.edit()
+                    .putString("callback_state_" + command, "started")
+                    .putLong("callback_started_at_" + command, now)
+                    .putString("callback_stage", "started")
+                    .putString("callback_command", command)
+                    .apply();
             return;
         }
 
@@ -42,27 +58,27 @@ public class PluginResultsReceiver extends BroadcastReceiver {
         String errorMessage = b == null ? intent.getStringExtra("com.re3ae6.mcpcontrol.ERROR_MESSAGE") : b.getString(PluginResultsService.ERRMSG, "");
 
         android.content.SharedPreferences.Editor e =
-                context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
+                prefs.edit()
                 .putString("stdout", stdout)
                 .putString("stderr", stderr)
                 .putInt("exit", exit)
                 .putInt("error_code", errorCode)
                 .putString("error_message", errorMessage)
-                .putString("last_command", command == null ? "" : command)
+                .putString("last_command", command)
                 .putLong("received_at", now)
                 .putString("callback_state", "received")
+                .putString("callback_stage", stage == null ? "finished" : stage)
                 .putString("callback_transport", "broadcast");
 
-        if (command != null && !command.isEmpty()) {
-            e.putString("callback_state_" + command, "received")
-             .putLong("callback_received_at_" + command, now)
-             .putString("stdout_" + command, stdout)
-             .putString("stderr_" + command, stderr)
-             .putInt("exit_" + command, exit)
-             .putInt("error_code_" + command, errorCode)
-             .putString("error_message_" + command, errorMessage)
-             .putLong("received_at_" + command, now);
-        }
-        e.apply();
+        e.putString("callback_state_" + command, "received")
+         .putLong("callback_received_at_" + command, now)
+         .putString("stdout_" + command, stdout)
+         .putString("stderr_" + command, stderr)
+         .putInt("exit_" + command, exit)
+         .putInt("error_code_" + command, errorCode)
+         .putString("error_message_" + command, errorMessage)
+         .putString("callback_stage_" + command, stage == null ? "finished" : stage)
+         .putLong("received_at_" + command, now)
+         .apply();
     }
 }
