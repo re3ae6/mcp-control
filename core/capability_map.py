@@ -19,3 +19,18 @@ def file_scope(path):
 def file_capabilities_for_path(name,path):
     cap=FILE_TOOLS.get(name)
     return [] if not cap else [cap,file_scope(path)]
+
+
+# UI/action catalog: every non-overview area exposes real MCP actions.
+AREA_TOOL_ACTIONS={
+    "files":("ls","read","search","context","history","changes_list","write","mkdir"),
+    "git":("git_pr","diff","run"),
+    "terminal":("run","cancel","session_start","session_run","session_poll","session_list","session_kill","terminal_open","terminal_run","terminal_send","terminal_read","terminal_list","terminal_close","system_info","health","process_list","cron_list","cron_add","cron_remove"),
+    "network":("open_url","download","public_ip","weather","speedtest","qrcode","cloud_sync"),
+    "mcp":("run","session_start","session_run","session_poll","session_list","session_kill","terminal_run","terminal_send","terminal_read","terminal_list","terminal_close"),
+    "device":("location","camera_photo","screenshot","image_process","text_extract","sms_send","sms_inbox","clipboard_get","clipboard_set","notify","toast","tts_speak","share"),
+    "dangerous":("delete","process_kill","smart_install","cron_remove"),
+}
+
+def tools_for_area(area):
+    return AREA_TOOL_ACTIONS.get(area,())
