@@ -3,7 +3,7 @@ package com.re3ae6.mcpcontrol;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.Service;
+import android.app.Service;\nimport android.app.ActivityManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -30,6 +30,7 @@ public class ConnectionMonitorService extends Service {
     private boolean mcpReady = false;
     private boolean proxyReady = false;
     private boolean tunnelReady = false;
+    private long lastAcceptedAt = 0L;
 
     private static final int GREEN = 0xFF4CAF50;
     private static final int RED = 0xFFF44336;
@@ -68,10 +69,11 @@ public class ConnectionMonitorService extends Service {
 
     private void restoreLastStatus() {
         try {
-            String out = getSharedPreferences("bridge", MODE_PRIVATE)
-                    .getString("monitor_status_json", "");
+            android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
+            String out = prefs.getString("monitor_status_json", "");
+            lastAcceptedAt = prefs.getLong("monitor_received_at", 0L);
             if (out == null || out.isEmpty()) return;
-            applyStatusJson(new JSONObject(out), false);
+            applyStatusJson(new JSONObject(out), false, lastAcceptedAt);
         } catch (Exception ignored) {}
     }
 
@@ -88,17 +90,10 @@ public class ConnectionMonitorService extends Service {
         return tunnel.contains("live") || tunnel.contains("ready") || o.optBoolean("tunnel_ok", false);
     }
 
-    private void applyStatusJson(JSONObject result, boolean notify) {
+    private void applyStatusJson(JSONObject result, boolean notify, long receivedAt) {
         if (result == null) return;
-        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
-        long incomingAt = prefs.getLong("received_at_status", 0L);
-        if (incomingAt <= 0L) incomingAt = System.currentTimeMillis();
-
-        long currentAt = prefs.getLong("monitor_received_at", 0L);
-        // One connection snapshot is authoritative. Never let an older/late
-        // callback replace a newer state already shown by Activity or Monitor.
-        if (currentAt > incomingAt) {
-            restoreNotificationState(prefs);
+        if (receivedAt <= 0L) receivedAt = System.currentTimeMillis();
+        if (lastAcceptedAt > receivedAt) {
             if (notify) updateNotification();
             return;
         }
@@ -106,10 +101,15 @@ public class ConnectionMonitorService extends Service {
         mcpReady = isMcpReady(result);
         proxyReady = isProxyReady(result);
         tunnelReady = isTunnelReady(result);
-        boolean connected = mcpReady && proxyReady && tunnelReady;
-        prefs.edit()
-                .putBoolean("monitor_connected", connected)
-                .putLong("monitor_received_at", incomingAt)
+        lastAcceptedAt = receivedAt;
+
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("monitor_connected", mcpReady && proxyReady && tunnelReady)
+                .putBoolean("monitor_mcp", mcpReady)
+                .putBoolean("monitor_proxy", proxyReady)
+                .putBoolean("monitor_tunnel", tunnelReady)
+                .putBoolean("monitor_fresh", true)
+                .putLong("monitor_received_at", receivedAt)
                 .putString("monitor_status_json", result.toString())
                 .putString("monitor_state", "connection_snapshot")
                 .putString("monitor_last_event",
@@ -144,9 +144,9 @@ public class ConnectionMonitorService extends Service {
     }
 
     private void checkConnection() {
-        android.content.SharedPreferences prefs =
-                getSharedPreferences("bridge", MODE_PRIVATE);
-
+        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
+        if (!prefs.getBoolean("monitor_enabled", true) ||
+                prefs.getBoolean("emergency_killed", false)) return;
         if (prefs.getBoolean("activity_visible", false)) return;
 
         String state = prefs.getString("callback_state_status", "");
@@ -165,8 +165,7 @@ public class ConnectionMonitorService extends Service {
 
     private void finishCheck(long sentAt) {
         try {
-            android.content.SharedPreferences prefs =
-                    getSharedPreferences("bridge", MODE_PRIVATE);
+            android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
             long receivedAt = prefs.getLong("received_at_status", 0L);
             String state = prefs.getString("callback_state_status", "");
             String out = prefs.getString("stdout_status", "");
@@ -174,19 +173,21 @@ public class ConnectionMonitorService extends Service {
             if (receivedAt >= sentAt && "received".equals(state)) {
                 try {
                     JSONObject result = new JSONObject(out);
-                    if (result.has("mcp") || result.has("proxy") || result.has("tunnel") || result.has("connected")) {
-                        boolean oldMcpReady = mcpReady;
-                        boolean oldProxyReady = proxyReady;
-                        boolean oldTunnelReady = tunnelReady;
-                        applyStatusJson(result, false);
-                        boolean indicatorChanged = oldMcpReady != mcpReady
-                                || oldProxyReady != proxyReady
-                                || oldTunnelReady != tunnelReady;
-                        if (indicatorChanged) updateNotification();
+                    if (result.has("mcp") || result.has("proxy") ||
+                            result.has("tunnel") || result.has("connected")) {
+                        boolean oldMcp = mcpReady, oldProxy = proxyReady, oldTunnel = tunnelReady;
+                        applyStatusJson(result, false, receivedAt);
+                        if (oldMcp != mcpReady || oldProxy != proxyReady || oldTunnel != tunnelReady) {
+                            updateNotification();
+                        }
                     } else {
-                        recordMonitorEvent("Invalid status response");
+                        getSharedPreferences("bridge", MODE_PRIVATE)
+                                .edit().putBoolean("monitor_fresh", false).apply();
                     }
                 } catch (Exception ignored) {}
+            } else if (System.currentTimeMillis() - sentAt >= RESULT_WAIT_MS) {
+                getSharedPreferences("bridge", MODE_PRIVATE)
+                        .edit().putBoolean("monitor_fresh", false).apply();
             }
         } finally {
             checking = false;
@@ -227,10 +228,8 @@ public class ConnectionMonitorService extends Service {
     }
 
     private PendingIntent activityExitIntent() {
-        Intent i = new Intent(this, MainActivity.class);
-        i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        i.putExtra("close_from_notification", true);
-        return PendingIntent.getActivity(this, 4205, i,
+        Intent i = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_EXIT);
+        return PendingIntent.getService(this, 4205, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
@@ -283,24 +282,34 @@ public class ConnectionMonitorService extends Service {
                 String out = intent.getStringExtra("status_json");
                 try {
                     if (out != null && !out.isEmpty()) {
-                        applyStatusJson(new JSONObject(out), true);
-                        recordMonitorEvent("Notification synced: MCP " + (mcpReady ? "OK" : "DOWN")
-                                + " / Proxy " + (proxyReady ? "OK" : "DOWN")
-                                + " / Tunnel " + (tunnelReady ? "LIVE" : "DOWN"));
+                        android.content.SharedPreferences prefs =
+                                getSharedPreferences("bridge", MODE_PRIVATE);
+                        long at = prefs.getLong("received_at_status", System.currentTimeMillis());
+                        applyStatusJson(new JSONObject(out), true, at);
                     }
-                } catch (Exception ignored) {
-                    recordMonitorEvent("Notification sync received invalid status");
-                }
-                return START_STICKY;
-            }
-
-            if (ACTION_NOOP.equals(action)) {
+                } catch (Exception ignored) {}
                 return START_STICKY;
             }
 
             if (ACTION_EXIT.equals(action)) {
+                getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                        .putBoolean("monitor_enabled", false)
+                        .putBoolean("activity_visible", false)
+                        .apply();
+
                 checking = false;
-                handler.removeCallbacks(loop);
+                handler.removeCallbacksAndMessages(null);
+
+                try {
+                    ActivityManager am =
+                            (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                    if (am != null) {
+                        for (ActivityManager.AppTask task : am.getAppTasks()) {
+                            try { task.finishAndRemoveTask(); } catch (RuntimeException ignored) {}
+                        }
+                    }
+                } catch (RuntimeException ignored) {}
+
                 stopForeground(true);
                 stopSelf();
                 return START_NOT_STICKY;
@@ -309,11 +318,20 @@ public class ConnectionMonitorService extends Service {
         return START_STICKY;
     }
 
-    @Override public void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-        super.onDestroy();
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
+        if (prefs.getBoolean("monitor_enabled", true) &&
+                !prefs.getBoolean("emergency_killed", false)) {
+            try {
+                Intent restart = new Intent(this, ConnectionMonitorService.class);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(restart);
+                else startService(restart);
+            } catch (RuntimeException ignored) {}
+        }
+        super.onTaskRemoved(rootIntent);
     }
+
+    @Override public void onDestroy()
 
     @Override public IBinder onBind(Intent intent) {
         return null;
