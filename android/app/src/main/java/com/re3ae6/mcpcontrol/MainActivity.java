@@ -304,11 +304,14 @@ public class MainActivity extends Activity {
 
     private void addIndicator(String name, boolean ok) {
         LinearLayout item = new LinearLayout(this);
-        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
         TextView dot = text("●", 18, ok ? GREEN : RED);
-        TextView nameText = text("  " + name + "  " + (ok ? "Ready" : "Offline"), 11, MUTED);
-        item.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(30)));
-        item.addView(nameText, new LinearLayout.LayoutParams(0, dp(30), 1));
+        dot.setGravity(Gravity.CENTER);
+        TextView nameText = text(name + "  " + (ok ? "Ready" : "Offline"), 10, MUTED);
+        nameText.setGravity(Gravity.CENTER);
+        item.addView(dot, new LinearLayout.LayoutParams(-1, dp(17)));
+        item.addView(nameText, new LinearLayout.LayoutParams(-1, dp(13)));
         indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(30), 1));
     }
 
@@ -385,15 +388,17 @@ public class MainActivity extends Activity {
     private View metric(String name, String value, int color) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setPadding(dp(13), dp(11), dp(10), dp(11));
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(8), dp(8), dp(8), dp(8));
         box.setBackground(bg(CARD, BORDER, 16));
         TextView n = text(name, 10, MUTED);
+        n.setGravity(Gravity.CENTER);
         n.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(n);
-        TextView v = text(value, 22, color);
+        box.addView(n, new LinearLayout.LayoutParams(-1, dp(18)));
+        TextView v = text(value, 18, color);
+        v.setGravity(Gravity.CENTER);
         v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(v);
+        box.addView(v, new LinearLayout.LayoutParams(-1, dp(28)));
         return box;
     }
 
