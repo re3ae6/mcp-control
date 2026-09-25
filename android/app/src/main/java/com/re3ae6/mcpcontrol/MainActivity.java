@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private boolean busy = false;
     private boolean connectionOk = false;
     private JSONObject lastConnectionStatus;
+    private long connectionSnapshotAt = 0L;
 
     private static final int BG = 0xfff7f6f2;
     private static final int CARD = 0xffffffff;
@@ -165,21 +166,42 @@ public class MainActivity extends Activity {
                 getSharedPreferences("bridge", MODE_PRIVATE);
         long receivedAt = prefs.getLong("monitor_received_at", 0L);
         if (receivedAt <= 0L || System.currentTimeMillis() - receivedAt > 30000L) return;
-
-        String json = prefs.getString("monitor_status_json", "");
         try {
-            JSONObject o = new JSONObject(json);
-            if (o.has("mcp") || o.has("proxy") || o.has("tunnel")) {
-                boolean m = isMcpReady(o);
-                boolean p = isProxyReady(o);
-                boolean t = isTunnelReady(o);
-                connectionOk = m && p && t;
-                lastConnectionStatus = o;
-                status.setText("●  " + (connectionOk ? "Connected" : "Disconnected"));
-                status.setTextColor(connectionOk ? GREEN : RED);
-                updateIndicators(o);
-            }
+            JSONObject o = new JSONObject(prefs.getString("monitor_status_json", ""));
+            applyConnectionSnapshot(o, receivedAt, "monitor");
         } catch (Exception ignored) {}
+    }
+
+    private boolean applyConnectionSnapshot(JSONObject o, long receivedAt, String source) {
+        if (o == null || !(o.has("mcp") || o.has("proxy") || o.has("tunnel") || o.has("connected"))) {
+            return connectionOk;
+        }
+        if (receivedAt <= 0L) receivedAt = System.currentTimeMillis();
+        if (connectionSnapshotAt > receivedAt) return connectionOk;
+
+        boolean m = isMcpReady(o);
+        boolean pr = isProxyReady(o);
+        boolean t = isTunnelReady(o);
+        boolean ok = m && pr && t;
+        connectionOk = ok;
+        lastConnectionStatus = o;
+        connectionSnapshotAt = receivedAt;
+        status.setText("●  " + (ok ? "Connected" : "Disconnected"));
+        status.setTextColor(ok ? GREEN : RED);
+        updateIndicators(o);
+
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("monitor_connected", ok)
+                .putLong("monitor_received_at", receivedAt)
+                .putString("monitor_status_json", o.toString())
+                .putString("monitor_state", "connection_snapshot_" + source)
+                .putString("monitor_last_event",
+                        "Connection state: MCP " + (m ? "OK" : "DOWN")
+                                + " / Proxy " + (pr ? "OK" : "DOWN")
+                                + " / Tunnel " + (t ? "LIVE" : "DOWN"))
+                .putLong("monitor_last_event_at", System.currentTimeMillis())
+                .apply();
+        return ok;
     }
 
     private void ensureNotificationPermission() {
@@ -483,8 +505,22 @@ public class MainActivity extends Activity {
         content.removeAllViews();
 
         addSectionHeader("System Overview", "Secure local controller");
-        addMasterBanner(true);
-        addBridgeConnectionCard(false, false, false);
+        boolean locked = policy != null
+                ? policy.optBoolean("master_lock", true)
+                : getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("master_lock", true);
+        addMasterBanner(locked);
+        JSONObject bridgeStatus = lastConnectionStatus;
+        if (bridgeStatus == null) {
+            try {
+                String cached = getSharedPreferences("bridge", MODE_PRIVATE)
+                        .getString("monitor_status_json", "");
+                if (cached != null && !cached.isEmpty()) bridgeStatus = new JSONObject(cached);
+            } catch (Exception ignored) {}
+        }
+        addBridgeConnectionCard(
+                bridgeStatus != null && isMcpReady(bridgeStatus),
+                bridgeStatus != null && isProxyReady(bridgeStatus),
+                bridgeStatus != null && isTunnelReady(bridgeStatus));
 
         highlightTab();
     }
@@ -832,26 +868,8 @@ public class MainActivity extends Activity {
         try {
             JSONObject o = new JSONObject(out);
             if (o.has("mcp") || o.has("proxy") || o.has("tunnel") || o.has("connected")) {
-                boolean m = isMcpReady(o);
-                boolean pr = isProxyReady(o);
-                boolean t = isTunnelReady(o);
-                boolean ok = m && pr && t;
-                connectionOk = ok;
-                lastConnectionStatus = o;
-                status.setText("●  " + (ok ? "Connected" : "Disconnected"));
-                status.setTextColor(ok ? GREEN : RED);
-                updateIndicators(o);
-                p.edit()
-                        .putBoolean("monitor_connected", ok)
-                        .putLong("monitor_received_at", System.currentTimeMillis())
-                        .putString("monitor_status_json", o.toString())
-                        .putString("monitor_state", "activity_status_ok")
-                        .putString("monitor_last_event",
-                                "Activity status: MCP " + (m ? "OK" : "DOWN")
-                                        + " / Proxy " + (pr ? "OK" : "DOWN")
-                                        + " / Tunnel " + (t ? "LIVE" : "DOWN"))
-                        .putLong("monitor_last_event_at", System.currentTimeMillis())
-                        .apply();
+                long receivedAt = p.getLong("received_at_status", System.currentTimeMillis());
+                boolean ok = applyConnectionSnapshot(o, receivedAt, "activity_status");
                 requestNotificationStatusSync(o);
                 return ok;
             }
@@ -913,6 +931,9 @@ public class MainActivity extends Activity {
                     JSONObject o = new JSONObject(out);
                     if (o.has("master_lock")) {
                         policy = o;
+                        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                                .putBoolean("master_lock", o.optBoolean("master_lock", true))
+                                .apply();
                         loaded = true;
                     }
                 } catch (Exception ignored) {}
@@ -1035,7 +1056,12 @@ public class MainActivity extends Activity {
             String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
             try {
                 JSONObject o = new JSONObject(out);
-                if (o.has("master_lock")) policy = o;
+                if (o.has("master_lock")) {
+                    policy = o;
+                    getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                            .putBoolean("master_lock", o.optBoolean("master_lock", true))
+                            .apply();
+                }
             } catch (Exception ignored) {}
             clearOutput();
             clearCommandResult("status");
