@@ -32,6 +32,9 @@ public class ConnectionMonitorService extends Service {
     private boolean proxyReady = false;
     private boolean tunnelReady = false;
 
+    private static final int GREEN = 0xFF4CAF50;
+    private static final int RED = 0xFFF44336;
+
     private final Runnable loop = new Runnable() {
         @Override public void run() {
             if (!checking) checkConnection();
@@ -42,6 +45,7 @@ public class ConnectionMonitorService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
+        restoreLastStatus();
         Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification,
@@ -60,6 +64,22 @@ public class ConnectionMonitorService extends Service {
         }
 
         handler.post(loop);
+    }
+
+    private void restoreLastStatus() {
+        try {
+            String out = getSharedPreferences("bridge", MODE_PRIVATE)
+                    .getString("monitor_status_json", "");
+            if (out == null || out.isEmpty()) return;
+            JSONObject result = new JSONObject(out);
+            mcpReady = "OK".equalsIgnoreCase(result.optString("mcp"))
+                    || result.optBoolean("mcp_ok", false);
+            proxyReady = "OK".equalsIgnoreCase(result.optString("proxy"))
+                    || result.optBoolean("proxy_ok", false);
+            String tunnel = result.optString("tunnel", "").toLowerCase();
+            tunnelReady = tunnel.contains("live") || tunnel.contains("ready")
+                    || result.optBoolean("tunnel_ok", false);
+        } catch (Exception ignored) {}
     }
 
     private void checkConnection() {
@@ -135,12 +155,13 @@ public class ConnectionMonitorService extends Service {
         boolean killed = getSharedPreferences("bridge", MODE_PRIVATE)
                 .getBoolean("emergency_killed", false);
 
-        String mcpLight = mcpReady ? "🟢" : "🔴";
-        String proxyLight = proxyReady ? "🟢" : "🔴";
-        String tunnelLight = tunnelReady ? "🟢" : "🔴";
+        String mcpLight = "●";
+        String proxyLight = "●";
+        String tunnelLight = "●";
 
         RemoteViews small = new RemoteViews(getPackageName(), R.layout.notification_monitor_small);
         setMonitorViews(small, mcpLight, proxyLight, tunnelLight, locked, killed);
+        setMonitorLightColors(small);
         small.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
         small.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
         small.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
@@ -150,6 +171,7 @@ public class ConnectionMonitorService extends Service {
 
         RemoteViews large = new RemoteViews(getPackageName(), R.layout.notification_monitor_large);
         setMonitorViews(large, mcpLight, proxyLight, tunnelLight, locked, killed);
+        setMonitorLightColors(large);
         large.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
@@ -163,6 +185,9 @@ public class ConnectionMonitorService extends Service {
                 .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
+                .setShowWhen(false)
+                .setLocalOnly(true)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
@@ -173,6 +198,12 @@ public class ConnectionMonitorService extends Service {
         Intent i = new Intent(this, ConnectionMonitorService.class).setAction(action);
         return PendingIntent.getService(this, requestCode, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private void setMonitorLightColors(RemoteViews views) {
+        views.setTextColor(R.id.notification_mcp_light, mcpReady ? GREEN : RED);
+        views.setTextColor(R.id.notification_proxy_light, proxyReady ? GREEN : RED);
+        views.setTextColor(R.id.notification_tunnel_light, tunnelReady ? GREEN : RED);
     }
 
     private void setMonitorViews(RemoteViews views, String mcpLight, String proxyLight,
@@ -214,12 +245,14 @@ public class ConnectionMonitorService extends Service {
             if (ACTION_LOCK.equals(action)) {
                 // Apply the real policy lock first, then engage the local fail-closed lock.
                 // This keeps the notification action equivalent to the in-app Lock control.
-                if (!prefs.getBoolean("emergency_locked", false)
-                        && !prefs.getBoolean("emergency_killed", false)) {
-                    McpBridge.run(this, "lock");
-                }
-                prefs.edit().putBoolean("emergency_locked", true).apply();
+                prefs.edit()
+                        .putBoolean("emergency_locked", true)
+                        .putBoolean("emergency_killed", false)
+                        .apply();
                 updateNotification();
+                // Do not block the notification action on the Termux bridge dispatch.
+                // The local fail-closed state is already active and visible immediately.
+                handler.post(() -> McpBridge.run(this, "lock"));
                 return START_STICKY;
             }
 
