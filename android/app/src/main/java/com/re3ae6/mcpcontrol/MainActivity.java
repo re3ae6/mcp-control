@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
     private final String[] groups = {"overview","files","git","terminal","network","mcp","device","dangerous"};
     private final String[] labels = {"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
     private static final int RUN_COMMAND_PERMISSION_REQUEST = 4101;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
 
@@ -97,6 +98,7 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         buildUi();
         renderOffline();
+        ensureNotificationPermission();
         ensureTermuxRunCommandPermission();
         if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) {
             startConnectionMonitor();
@@ -110,6 +112,7 @@ public class MainActivity extends Activity {
                 .apply();
         startConnectionMonitor();
         applyMonitorSnapshot();
+        refreshStatusSnapshot();
     }
 
     @Override protected void onPause() {
@@ -150,6 +153,26 @@ public class MainActivity extends Activity {
                 updateIndicators(o);
             }
         } catch (Exception ignored) {}
+    }
+
+    private void ensureNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST);
+        }
+    }
+
+    private void refreshStatusSnapshot() {
+        if (busy || getSharedPreferences("bridge", MODE_PRIVATE)
+                .getBoolean("emergency_killed", false)) return;
+        clearCommandResult("status");
+        if (!McpBridge.run(this, "status")) return;
+        handler.postDelayed(() -> {
+            if (isFinishing()) return;
+            String error = commandError("status");
+            if (!error.isEmpty()) return;
+            applyStatusResult();
+        }, 700L);
     }
 
     private void ensureTermuxRunCommandPermission() {
