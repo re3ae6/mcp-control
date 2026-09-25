@@ -175,7 +175,7 @@ public class ConnectionMonitorService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
                 .setContentIntent(contentIntent)
-                .setSmallIcon(R.mipmap.mcp_control_launcher)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
                 .setCustomHeadsUpContentView(large)
