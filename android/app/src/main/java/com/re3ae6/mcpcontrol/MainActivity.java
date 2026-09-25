@@ -304,14 +304,11 @@ public class MainActivity extends Activity {
 
     private void addIndicator(String name, boolean ok) {
         LinearLayout item = new LinearLayout(this);
-        item.setOrientation(LinearLayout.VERTICAL);
-        item.setGravity(Gravity.CENTER);
+        item.setGravity(Gravity.CENTER_VERTICAL);
         TextView dot = text("●", 18, ok ? GREEN : RED);
-        dot.setGravity(Gravity.CENTER);
-        TextView nameText = text(name + "  " + (ok ? "Ready" : "Offline"), 10, MUTED);
-        nameText.setGravity(Gravity.CENTER);
-        item.addView(dot, new LinearLayout.LayoutParams(-1, dp(17)));
-        item.addView(nameText, new LinearLayout.LayoutParams(-1, dp(13)));
+        TextView nameText = text("  " + name + "  " + (ok ? "Ready" : "Offline"), 11, MUTED);
+        item.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(30)));
+        item.addView(nameText, new LinearLayout.LayoutParams(0, dp(30), 1));
         indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(30), 1));
     }
 
