@@ -46,6 +46,7 @@ class SecurityMatrixTests(unittest.TestCase):
             patch.object(trusted_control, "AUDIT_FILE", self.audit_file),
             patch.object(approval, "ROOT", root),
             patch.object(approval, "FILE", self.approval_file),
+            patch.object(approval, "LOCK", root / "approvals.lock"),
             patch.object(approval, "AUDIT", self.audit_file_2),
         ]
         for p in self.patches:
