@@ -535,13 +535,13 @@ public class MainActivity extends Activity {
             return;
         }
         handler.postDelayed(() -> {
-            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout", "");
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
             try {
                 JSONObject o = new JSONObject(out);
                 if (o.has("master_lock")) policy = o;
             } catch (Exception ignored) {}
             clearOutput();
-            if (!McpBridge.run(this, "status")) {
+            if (!McpBridge.run(this, "status"))
                 bridgeFailure("Status query could not be started.");
                 return;
             }
