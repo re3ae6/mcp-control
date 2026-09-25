@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.widget.RemoteViews;
 
 import org.json.JSONObject;
 
@@ -133,30 +134,52 @@ public class ConnectionMonitorService extends Service {
                 this, 4204, kill,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Intent exit = new Intent(this, ConnectionMonitorService.class)
-                .setAction(ACTION_EXIT);
+        Intent exit = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_EXIT);
         PendingIntent exitIntent = PendingIntent.getService(
                 this, 4205, exit,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        String top = "MCP            Proxy            Tunnel";
-        String bottom = (mcpReady ? "🟢" : "🔴")
-                + "              " + (proxyReady ? "🟢" : "🔴")
-                + "              " + (tunnelReady ? "🟢" : "🔴");
-        String body = top + "\n" + bottom;
+        boolean locked = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getBoolean("emergency_locked", false);
+        boolean killed = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getBoolean("emergency_killed", false);
+
+        String mcpLight = mcpReady ? "🟢" : "🔴";
+        String proxyLight = proxyReady ? "🟢" : "🔴";
+        String tunnelLight = tunnelReady ? "🟢" : "🔴";
+
+        RemoteViews small = new RemoteViews(getPackageName(), R.layout.notification_monitor_small);
+        small.setTextViewText(R.id.notification_mcp, "MCP");
+        small.setTextViewText(R.id.notification_proxy, "Proxy");
+        small.setTextViewText(R.id.notification_tunnel, "Tunnel");
+        small.setTextViewText(R.id.notification_mcp_light, mcpLight);
+        small.setTextViewText(R.id.notification_proxy_light, proxyLight);
+        small.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
+
+        RemoteViews large = new RemoteViews(getPackageName(), R.layout.notification_monitor_large);
+        large.setTextViewText(R.id.notification_mcp, "MCP");
+        large.setTextViewText(R.id.notification_proxy, "Proxy");
+        large.setTextViewText(R.id.notification_tunnel, "Tunnel");
+        large.setTextViewText(R.id.notification_mcp_light, mcpLight);
+        large.setTextViewText(R.id.notification_proxy_light, proxyLight);
+        large.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
+        large.setTextViewText(R.id.notification_lock, locked ? "LOCKED" : "LOCK");
+        large.setTextViewText(R.id.notification_kill, killed ? "KILLED" : "KILL");
+        large.setTextViewText(R.id.notification_exit, "EXIT");
+        large.setOnClickPendingIntent(R.id.notification_lock, lockIntent);
+        large.setOnClickPendingIntent(R.id.notification_kill, killIntent);
+        large.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
-                .setContentText(top + "  " + bottom)
-                .setStyle(new Notification.BigTextStyle().bigText(body))
+                .setContentText("MCP  " + mcpLight + "    Proxy  " + proxyLight + "    Tunnel  " + tunnelLight)
                 .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setContentIntent(contentIntent)
+                .setCustomContentView(small)
+                .setCustomBigContentView(large)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(new Notification.Action.Builder(null, "LOCK", lockIntent).build())
-                .addAction(new Notification.Action.Builder(null, "KILL", killIntent).build())
-                .addAction(new Notification.Action.Builder(null, "EXIT", exitIntent).build())
                 .build();
     }
 
@@ -184,19 +207,27 @@ public class ConnectionMonitorService extends Service {
                     getSharedPreferences("bridge", MODE_PRIVATE);
 
             if (ACTION_LOCK.equals(action)) {
+                // Apply the real policy lock first, then engage the local fail-closed lock.
+                // This keeps the notification action equivalent to the in-app Lock control.
+                if (!prefs.getBoolean("emergency_locked", false)
+                        && !prefs.getBoolean("emergency_killed", false)) {
+                    McpBridge.run(this, "lock");
+                }
                 prefs.edit().putBoolean("emergency_locked", true).apply();
                 updateNotification();
                 return START_STICKY;
             }
 
             if (ACTION_KILL.equals(action)) {
+                // KILL is an emergency bridge lock, not a request to kill this monitor.
+                // Keep the foreground notification alive so the user can see the state.
                 prefs.edit()
                         .putBoolean("emergency_locked", true)
                         .putBoolean("emergency_killed", true)
                         .apply();
-                stopForeground(true);
-                stopSelf();
-                return START_NOT_STICKY;
+                checking = false;
+                updateNotification();
+                return START_STICKY;
             }
 
             if (ACTION_EXIT.equals(action)) {
