@@ -20,6 +20,7 @@ public class ConnectionMonitorService extends Service {
     private static final String ACTION_LOCK = "com.re3ae6.mcpcontrol.LOCK";
     private static final String ACTION_KILL = "com.re3ae6.mcpcontrol.KILL";
     private static final String ACTION_EXIT = "com.re3ae6.mcpcontrol.EXIT";
+    private static final String ACTION_NOOP = "com.re3ae6.mcpcontrol.NOOP";
     private static final int NOTIFICATION_ID = 4201;
     private static final long INTERVAL_MS = 10000L;
     private static final long RESULT_WAIT_MS = 1600L;
@@ -124,20 +125,10 @@ public class ConnectionMonitorService extends Service {
                 this, 4202, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Intent lock = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_LOCK);
-        PendingIntent lockIntent = PendingIntent.getService(
-                this, 4203, lock,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Intent kill = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_KILL);
-        PendingIntent killIntent = PendingIntent.getService(
-                this, 4204, kill,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Intent exit = new Intent(this, ConnectionMonitorService.class).setAction(ACTION_EXIT);
-        PendingIntent exitIntent = PendingIntent.getService(
-                this, 4205, exit,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent lockIntent = actionIntent(ACTION_LOCK, 4203);
+        PendingIntent killIntent = actionIntent(ACTION_KILL, 4204);
+        PendingIntent exitIntent = actionIntent(ACTION_EXIT, 4205);
+        PendingIntent noopIntent = actionIntent(ACTION_NOOP, 4206);
 
         boolean locked = getSharedPreferences("bridge", MODE_PRIVATE)
                 .getBoolean("emergency_locked", false);
@@ -149,38 +140,52 @@ public class ConnectionMonitorService extends Service {
         String tunnelLight = tunnelReady ? "🟢" : "🔴";
 
         RemoteViews small = new RemoteViews(getPackageName(), R.layout.notification_monitor_small);
-        small.setTextViewText(R.id.notification_mcp, "MCP");
-        small.setTextViewText(R.id.notification_proxy, "Proxy");
-        small.setTextViewText(R.id.notification_tunnel, "Tunnel");
-        small.setTextViewText(R.id.notification_mcp_light, mcpLight);
-        small.setTextViewText(R.id.notification_proxy_light, proxyLight);
-        small.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
+        setMonitorViews(small, mcpLight, proxyLight, tunnelLight, locked, killed);
+        small.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
+        small.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
+        small.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
+        small.setOnClickPendingIntent(R.id.notification_lock, lockIntent);
+        small.setOnClickPendingIntent(R.id.notification_kill, killIntent);
+        small.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         RemoteViews large = new RemoteViews(getPackageName(), R.layout.notification_monitor_large);
-        large.setTextViewText(R.id.notification_mcp, "MCP");
-        large.setTextViewText(R.id.notification_proxy, "Proxy");
-        large.setTextViewText(R.id.notification_tunnel, "Tunnel");
-        large.setTextViewText(R.id.notification_mcp_light, mcpLight);
-        large.setTextViewText(R.id.notification_proxy_light, proxyLight);
-        large.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
-        large.setTextViewText(R.id.notification_lock, locked ? "LOCKED" : "LOCK");
-        large.setTextViewText(R.id.notification_kill, killed ? "KILLED" : "KILL");
-        large.setTextViewText(R.id.notification_exit, "EXIT");
+        setMonitorViews(large, mcpLight, proxyLight, tunnelLight, locked, killed);
+        large.setOnClickPendingIntent(R.id.notification_mcp_light, noopIntent);
+        large.setOnClickPendingIntent(R.id.notification_proxy_light, noopIntent);
+        large.setOnClickPendingIntent(R.id.notification_tunnel_light, noopIntent);
         large.setOnClickPendingIntent(R.id.notification_lock, lockIntent);
         large.setOnClickPendingIntent(R.id.notification_kill, killIntent);
         large.setOnClickPendingIntent(R.id.notification_exit, exitIntent);
 
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MCP Control")
-                .setContentText("MCP  " + mcpLight + "    Proxy  " + proxyLight + "    Tunnel  " + tunnelLight)
-                .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setContentIntent(contentIntent)
+                .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setCustomContentView(small)
                 .setCustomBigContentView(large)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
+    }
+
+    private PendingIntent actionIntent(String action, int requestCode) {
+        Intent i = new Intent(this, ConnectionMonitorService.class).setAction(action);
+        return PendingIntent.getService(this, requestCode, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private void setMonitorViews(RemoteViews views, String mcpLight, String proxyLight,
+                                 String tunnelLight, boolean locked, boolean killed) {
+        views.setTextViewText(R.id.notification_mcp, "MCP");
+        views.setTextViewText(R.id.notification_proxy, "Proxy");
+        views.setTextViewText(R.id.notification_tunnel, "Tunnel");
+        views.setTextViewText(R.id.notification_mcp_light, mcpLight);
+        views.setTextViewText(R.id.notification_proxy_light, proxyLight);
+        views.setTextViewText(R.id.notification_tunnel_light, tunnelLight);
+        views.setTextViewText(R.id.notification_lock, locked ? "Locked" : "Lock");
+        views.setTextViewText(R.id.notification_kill, killed ? "Killed" : "Kill");
+        views.setTextViewText(R.id.notification_exit, "EXIT");
     }
 
     private void updateNotification() {
@@ -227,6 +232,10 @@ public class ConnectionMonitorService extends Service {
                         .apply();
                 checking = false;
                 updateNotification();
+                return START_STICKY;
+            }
+
+            if (ACTION_NOOP.equals(action)) {
                 return START_STICKY;
             }
 
