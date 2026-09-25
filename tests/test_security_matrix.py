@@ -130,7 +130,8 @@ class SecurityMatrixTests(unittest.TestCase):
             trusted_control.dispatch("unlock", confirmation="UNLOCK", local_ui=True)
 
     def test_explicit_tool_mapping_is_covered_by_policy(self):
-        policy_data = policy.load_policy()
+        canonical = Path(__file__).resolve().parents[1] / "policies" / "default.json"
+        policy_data = json.loads(canonical.read_text(encoding="utf-8"))
         ids = {item["id"] for group in policy_data["capabilities"].values() for item in group}
         operational = set(TOOL_CAPABILITIES.values())
         operational.update(cap for caps in TOOL_SECONDARY_CAPABILITIES.values() for cap in caps)
