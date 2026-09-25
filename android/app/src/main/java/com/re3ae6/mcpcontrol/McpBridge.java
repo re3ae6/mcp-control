@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import java.util.UUID;
 
 public final class McpBridge {
     private McpBridge() {}
@@ -14,25 +15,31 @@ public final class McpBridge {
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
                 "/data/data/com.termux/files/home/mcp-control/tools/mobile_control.sh");
-        i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", args);
         i.putExtra("com.termux.RUN_COMMAND_WORKDIR",
                 "/data/data/com.termux/files/home/mcp-control");
         i.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true);
 
+        String command = args.length == 0 ? "" : args[0];
+        String token = UUID.randomUUID().toString();
+        String[] bridgeArgs = new String[args.length + 1];
+        System.arraycopy(args, 0, bridgeArgs, 0, args.length);
+        bridgeArgs[args.length] = "__MCP_CONTROL_TOKEN__=" + token;
+        i.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", bridgeArgs);
+
         Intent result = new Intent(context, PluginResultsActivity.class);
-        result.putExtra("mcp_control_command", args.length == 0 ? "" : args[0]);
+        result.putExtra("mcp_control_command", command);
         int code = (int)(System.currentTimeMillis() & 0x7fffffff);
         int flags = PendingIntent.FLAG_ONE_SHOT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_MUTABLE;
         i.putExtra("com.termux.RUN_COMMAND_PENDING_INTENT",
                 PendingIntent.getActivity(context, code, result, flags));
-        String command = args.length == 0 ? "" : args[0];
         long sentAt = System.currentTimeMillis();
         context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
                 .putString("sent_command", command)
                 .putInt("sent_execution_id", code)
                 .putLong("sent_at_" + command, sentAt)
                 .putString("callback_state_" + command, "pending")
+                .putString("callback_token_" + command, token)
                 .apply();
         try {
             context.startService(i);
