@@ -177,8 +177,29 @@ public class MainActivity extends Activity {
     }
 
     private void ensureTermuxRunCommandPermission() {
-        // RUN_COMMAND is a Termux-managed Additional Permission, not a normal
-        // Android runtime permission. It must be granted from this app's App Info.
+        // RUN_COMMAND is a Termux-managed Additional Permission. Android cannot
+        // grant it silently; on first launch we explicitly guide the user to it.
+        if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) return;
+        if (getSharedPreferences("bridge", MODE_PRIVATE)
+                .getBoolean("termux_permission_prompted", false)) return;
+        handler.postDelayed(this::promptTermuxPermission, 900L);
+    }
+
+    private void promptTermuxPermission() {
+        if (isFinishing() || checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) return;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Termux permission required")
+                .setMessage("MCP Control needs “Run commands in Termux environment” for the bridge. Open App Info → Permissions → Additional permissions and allow it.")
+                .setCancelable(false)
+                .setNegativeButton("Later", (d, w) ->
+                        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                                .putBoolean("termux_permission_prompted", true).apply())
+                .setPositiveButton("Open permissions", (d, w) -> {
+                    getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                            .putBoolean("termux_permission_prompted", true).apply();
+                    openTermuxPermissionSettings();
+                })
+                .show();
     }
 
     private void openTermuxPermissionSettings() {
@@ -198,6 +219,8 @@ public class MainActivity extends Activity {
             } else {
                 addLogBox("Termux permission required. Open MCP Control → Permissions → Additional permissions → Run commands in Termux environment.");
             }
+        } else if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            handler.postDelayed(this::ensureTermuxRunCommandPermission, 300L);
         }
     }
 
