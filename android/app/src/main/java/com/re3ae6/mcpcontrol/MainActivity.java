@@ -541,7 +541,7 @@ public class MainActivity extends Activity {
                 if (o.has("master_lock")) policy = o;
             } catch (Exception ignored) {}
             clearOutput();
-            if (!McpBridge.run(this, "status"))
+            if (!McpBridge.run(this, "status")) {
                 bridgeFailure("Status query could not be started.");
                 return;
             }
@@ -559,7 +559,10 @@ public class MainActivity extends Activity {
         status.setText("●  Saving…");
         status.setTextColor(YELLOW);
         clearOutput();
-        McpBridge.run(this,"set",id,n);
+        if (!McpBridge.run(this,"set",id,n)) {
+            bridgeFailure("Could not start the policy change in Termux.");
+            return;
+        }
         handler.postDelayed(()->{syncPolicyAndStatus();},1100);
     }
 
@@ -569,7 +572,10 @@ public class MainActivity extends Activity {
         status.setText("●  "+a.substring(0,1).toUpperCase()+a.substring(1)+"…");
         status.setTextColor(YELLOW);
         clearOutput();
-        McpBridge.run(this,a);
+        if (!McpBridge.run(this,a)) {
+            bridgeFailure("Could not start the " + a + " action in Termux.");
+            return;
+        }
         handler.postDelayed(()->{syncPolicyAndStatus();},d);
     }
 
@@ -579,7 +585,10 @@ public class MainActivity extends Activity {
         status.setText("●  Locking…");
         status.setTextColor(YELLOW);
         clearOutput();
-        McpBridge.run(this,"lock");
+        if (!McpBridge.run(this,"lock")) {
+            bridgeFailure("Could not lock the control plane in Termux.");
+            return;
+        }
         handler.postDelayed(()->{syncPolicyAndStatus();},900);
     }
 
@@ -589,7 +598,10 @@ public class MainActivity extends Activity {
         status.setText("●  Unlocking…");
         status.setTextColor(YELLOW);
         clearOutput();
-        McpBridge.run(this,"unlock","UNLOCK");
-        handler.postDelayed(()->{busy=false;refresh();},900);
+        if (!McpBridge.run(this,"unlock","UNLOCK")) {
+            bridgeFailure("Could not unlock the control plane in Termux.");
+            return;
+        }
+        handler.postDelayed(()->{syncPolicyAndStatus();},900);
     }
 }
