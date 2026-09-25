@@ -5,6 +5,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.ViewGroup;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.view.Gravity;
@@ -23,13 +26,11 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private final Handler handler = new Handler();
     private LinearLayout content, indicatorRow, tabBar;
-    private TextView status, lockBanner, systemInfo;
+    private ScrollView scrollView;
+    private TextView status, lockBanner;
     private JSONObject policy;
     private String group = "overview";
     private boolean busy = false;
-    private final Runnable clockTicker = new Runnable() {
-        @Override public void run() { updateSystemInfo(); handler.postDelayed(this, 30000L); }
-    };
 
     private static final int BG = 0xfff7f6f2;
     private static final int CARD = 0xffffffff;
@@ -88,6 +89,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         buildUi();
         renderOffline();
     }
@@ -99,7 +101,12 @@ public class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(20), dp(34), dp(20), dp(14));
+        header.setPadding(dp(20), dp(20), dp(20), dp(14));
+        header.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top = insets.getSystemWindowInsetTop();
+            v.setPadding(dp(20), dp(20) + top, dp(20), dp(14));
+            return insets;
+        });
         header.setBackgroundColor(BG);
 
         LinearLayout brand = new LinearLayout(this);
@@ -107,13 +114,7 @@ public class MainActivity extends Activity {
 
         TextView title = text("MCP Control", 25, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        brand.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
-
-        systemInfo = text("", 11, MUTED);
-        systemInfo.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        systemInfo.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        brand.addView(systemInfo, new LinearLayout.LayoutParams(dp(112), dp(36)));
-        updateSystemInfo();
+        brand.addView(title, new LinearLayout.LayoutParams(-1, dp(36)));
         header.addView(brand);
 
         status = text("●  Offline", 13, RED);
@@ -163,31 +164,21 @@ public class MainActivity extends Activity {
         tabs.addView(tabBar);
         root.addView(tabs);
 
-        ScrollView scroll = new ScrollView(this);
+        scrollView = new ScrollView(this);
+        scrollView.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(16), dp(18), dp(16), dp(32));
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        scrollView.addView(content);
+        scrollView.setOnApplyWindowInsetsListener((v, insets) -> {
+            int bottom = insets.getSystemWindowInsetBottom();
+            content.setPadding(dp(16), dp(18), dp(16), dp(32) + bottom);
+            return insets;
+        });
+        root.addView(scrollView, new LinearLayout.LayoutParams(-1, 0, 1));
 
         setContentView(root);
         highlightTab();
-        handler.postDelayed(clockTicker, 30000L);
-    }
-
-    private void updateSystemInfo() {
-        int level = -1;
-        try {
-            android.content.Intent battery = registerReceiver(null, new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
-            if (battery != null) {
-                int current = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-                int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-                if (current >= 0 && scale > 0) level = Math.round(current * 100f / scale);
-            }
-        } catch (Exception ignored) {}
-        String battery = level >= 0 ? level + "%" : "—";
-        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
-        if (systemInfo != null) systemInfo.setText(time + "  •  " + battery);
     }
 
     private void setInitialIndicators() {
@@ -603,6 +594,7 @@ public class MainActivity extends Activity {
         log.setPadding(dp(12), dp(12), dp(12), dp(12));
         log.setBackground(bg(0xfffaf9f6, BORDER, 12));
         content.addView(log, new LinearLayout.LayoutParams(-1, -2));
+        if (scrollView != null) scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
     }
 
     private void syncPolicyAndStatus() {
