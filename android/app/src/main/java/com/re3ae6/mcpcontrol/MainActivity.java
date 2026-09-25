@@ -979,10 +979,14 @@ public class MainActivity extends Activity {
     }
 
     private void loadPolicyAndFinish() {
-        loadPolicyAndFinish(0);
+        loadPolicyAndFinish(0, null);
     }
 
-    private void loadPolicyAndFinish(int attempt) {
+    private void loadPolicyAndFinish(Runnable afterLoaded) {
+        loadPolicyAndFinish(0, afterLoaded);
+    }
+
+    private void loadPolicyAndFinish(int attempt, Runnable afterLoaded) {
         // Do not redispatch policy while an earlier callback may still be in flight.
         // A late callback from a previous attempt is rejected by the token guard, so
         // repeated dispatches can accidentally discard the valid result we are waiting for.
@@ -991,7 +995,7 @@ public class MainActivity extends Activity {
 
         if (!McpBridge.run(this, "policy")) {
             if (attempt < 2) {
-                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1), 1000L);
+                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1, afterLoaded), 1000L);
             } else {
                 operationFailure("Connected, but the policy query could not be started.");
             }
@@ -1000,10 +1004,10 @@ public class MainActivity extends Activity {
 
         final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
                 .getLong("sent_at_policy", System.currentTimeMillis());
-        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L);
+        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L, afterLoaded);
     }
 
-    private void waitForPolicyResult(long sentAt, long deadline) {
+    private void waitForPolicyResult(long sentAt, long deadline, Runnable afterLoaded) {
         handler.postDelayed(() -> {
             android.content.SharedPreferences bridge =
                     getSharedPreferences("bridge", MODE_PRIVATE);
@@ -1021,6 +1025,7 @@ public class MainActivity extends Activity {
                         policy = o;
                         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                                 .putBoolean("master_lock", o.optBoolean("master_lock", true))
+                                .putString("policy_json", o.toString())
                                 .apply();
                         loaded = true;
                     }
@@ -1028,8 +1033,12 @@ public class MainActivity extends Activity {
             }
 
             if (loaded) {
-                busy = false;
-                render();
+                if (afterLoaded != null) {
+                    afterLoaded.run();
+                } else {
+                    busy = false;
+                    render();
+                }
                 return;
             }
 
@@ -1041,7 +1050,7 @@ public class MainActivity extends Activity {
             }
 
             if (System.currentTimeMillis() < deadline) {
-                waitForPolicyResult(sentAt, deadline);
+                waitForPolicyResult(sentAt, deadline, afterLoaded);
                 return;
             }
 
@@ -1129,28 +1138,20 @@ public class MainActivity extends Activity {
     }
 
     private void syncPolicyAndStatus() {
+        // Use the same callback-token-aware policy waiter as initial load. The old
+        // fixed 650 ms read could race a slow Termux callback, leaving the UI stale
+        // until the user pressed Connect / Refresh.
         clearOutput();
         clearCommandResult("policy");
         if (!McpBridge.run(this, "policy")) {
             operationFailure("Policy query could not be started.");
             return;
         }
-        handler.postDelayed(() -> {
-            String policyError = commandError("policy");
-            if (!policyError.isEmpty()) {
-                operationFailure(policyError);
-                return;
-            }
-            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_policy", "");
-            try {
-                JSONObject o = new JSONObject(out);
-                if (o.has("master_lock")) {
-                    policy = o;
-                    getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                            .putBoolean("master_lock", o.optBoolean("master_lock", true))
-                            .apply();
-                }
-            } catch (Exception ignored) {}
+
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_policy", System.currentTimeMillis());
+
+        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L, () -> {
             clearOutput();
             clearCommandResult("status");
             if (!McpBridge.run(this, "status")) {
@@ -1166,8 +1167,8 @@ public class MainActivity extends Activity {
                 applyStatusResult();
                 busy = false;
                 render();
-            }, 550L);
-        }, 650L);
+            }, 700L);
+        });
     }
 
     private void loadApprovals() {
