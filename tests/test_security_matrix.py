@@ -154,6 +154,8 @@ class SecurityMatrixTests(unittest.TestCase):
         ids = {item["id"] for group in policy_data["capabilities"].values() for item in group}
         operational = set(TOOL_CAPABILITIES.values())
         operational.update(cap for caps in TOOL_SECONDARY_CAPABILITIES.values() for cap in caps)
+        # Unknown tools fail closed through this explicit fallback capability.
+        operational.add("dangerous.outside_allowlist")
         operational.update({
             "git.pull", "git.status", "git.diff", "git.add", "git.commit",
             "git.push", "git.branch",
