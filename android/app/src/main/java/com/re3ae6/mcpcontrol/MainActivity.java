@@ -391,16 +391,22 @@ public class MainActivity extends Activity {
 
     private void setInitialIndicators() {
         indicatorRow.removeAllViews();
-        addIndicator("MCP", false);
-        addIndicator("Proxy", false);
-        addIndicator("Tunnel", false);
+        addIndicator("MCP", false, false);
+        addIndicator("Proxy", false, false);
+        addIndicator("Tunnel", false, false);
     }
 
     private void addIndicator(String name, boolean ok) {
+        addIndicator(name, ok, true);
+    }
+
+    private void addIndicator(String name, boolean ok, boolean fresh) {
         LinearLayout item = new LinearLayout(this);
         item.setGravity(Gravity.CENTER_VERTICAL);
-        TextView dot = text("●", 12, ok ? GREEN : RED);
-        TextView n = text(" " + name + "  " + (ok ? "Ready" : "Offline"), 10, MUTED);
+        int color = fresh ? (ok ? GREEN : RED) : YELLOW;
+        String state = fresh ? (ok ? "Ready" : "Offline") : "Checking";
+        TextView dot = text("●", 12, color);
+        TextView n = text(" " + name + "  " + state, 10, MUTED);
         item.addView(dot, new LinearLayout.LayoutParams(dp(15), dp(22)));
         item.addView(n, new LinearLayout.LayoutParams(0, dp(22), 1));
         indicatorRow.addView(item, new LinearLayout.LayoutParams(0, dp(22), 1));
@@ -670,9 +676,9 @@ public class MainActivity extends Activity {
 
     private void updateIndicators(JSONObject o) {
         indicatorRow.removeAllViews();
-        addIndicator("MCP", isMcpReady(o));
-        addIndicator("Proxy", isProxyReady(o));
-        addIndicator("Tunnel", isTunnelReady(o));
+        addIndicator("MCP", isMcpReady(o), connectionFresh);
+        addIndicator("Proxy", isProxyReady(o), connectionFresh);
+        addIndicator("Tunnel", isTunnelReady(o), connectionFresh);
     }
 
     private void addMonitorDiagnosticsCard() {
