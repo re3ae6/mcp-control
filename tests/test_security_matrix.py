@@ -6,6 +6,13 @@ from unittest.mock import patch
 
 from core import approval, policy, trusted_control
 
+from core.capability_map import (
+    TOOL_CAPABILITIES,
+    TOOL_SECONDARY_CAPABILITIES,
+    capability_for_tool,
+    git_capability_for_command,
+)
+
 
 class SecurityMatrixTests(unittest.TestCase):
     def setUp(self):
