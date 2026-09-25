@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         brand.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1));
 
-        TextView signature = text("re3a  •  v0.2.0", 11, MUTED);
+        TextView signature = text("re3a  •  v0.2.1", 11, MUTED);
         signature.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         signature.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         brand.addView(signature, new LinearLayout.LayoutParams(dp(112), dp(36)));
