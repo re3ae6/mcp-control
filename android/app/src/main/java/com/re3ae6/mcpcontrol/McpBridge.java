@@ -21,7 +21,7 @@ public final class McpBridge {
 
         // Emergency controls are local and fail closed. Read-only status/policy
         // remain available for visibility; only an explicit Unlock can clear the stop.
-        if ((emergencyLocked || emergencyKilled) && !readOnly && !unlock) {
+        if ((emergencyLocked || emergencyKilled) && !readOnly && !unlock && !"lock".equals(command)) {
             prefs.edit()
                     .putString("last_error", "Emergency lock active: command denied.")
                     .putLong("last_error_at", System.currentTimeMillis())
