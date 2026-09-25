@@ -48,7 +48,7 @@ class GatewayApprovalE2ETests(unittest.TestCase):
             return action()
         if decision.state == "ask":
             item = enforcer.request_approval(capability, tool, params)
-            enforcer.approve(item["approval_id"])
+            approval.approve(item["approval_id"])
             enforcer.consume_approval(
                 item["approval_id"], capability, tool, params
             )
@@ -103,7 +103,7 @@ class GatewayApprovalE2ETests(unittest.TestCase):
         item = enforcer.request_approval(
             "terminal.python", "terminal.run", {"command": "echo ok"}
         )
-        enforcer.approve(item["approval_id"])
+        approval.approve(item["approval_id"])
         with self.assertRaisesRegex(
             PermissionError, "approval_request_mismatch"
         ):
@@ -116,7 +116,7 @@ class GatewayApprovalE2ETests(unittest.TestCase):
         item = enforcer.request_approval(
             "terminal.python", "terminal.run", {"command": "echo ok"}
         )
-        enforcer.approve(item["approval_id"])
+        approval.approve(item["approval_id"])
         enforcer.consume_approval(
             item["approval_id"], "terminal.python",
             "terminal.run", {"command": "echo ok"}
