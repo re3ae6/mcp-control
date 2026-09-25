@@ -152,6 +152,12 @@ public class MainActivity extends Activity {
             final String g = groups[i];
             Button b = button(labels[i], v -> { group = g; render(); });
             b.setTag(g);
+            b.setTextSize(11);
+            b.setSingleLine(true);
+            b.setMaxLines(1);
+            b.setIncludeFontPadding(false);
+            b.setGravity(Gravity.CENTER);
+            b.setPadding(dp(8), 0, dp(8), 0);
             tabBar.addView(b, new LinearLayout.LayoutParams(dp(92), dp(40)));
         }
         tabs.addView(tabBar);
