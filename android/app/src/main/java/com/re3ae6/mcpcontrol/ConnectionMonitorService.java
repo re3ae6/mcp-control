@@ -143,7 +143,7 @@ public class ConnectionMonitorService extends Service {
                 this, 4202, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        PendingIntent exitIntent = actionIntent(ACTION_EXIT, 4205);
+        PendingIntent exitIntent = activityExitIntent();
         PendingIntent noopIntent = actionIntent(ACTION_NOOP, 4206);
 
         String mcpLight = "●";
@@ -179,6 +179,14 @@ public class ConnectionMonitorService extends Service {
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
+    }
+
+    private PendingIntent activityExitIntent() {
+        Intent i = new Intent(this, MainActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        i.putExtra("close_from_notification", true);
+        return PendingIntent.getActivity(this, 4205, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     private PendingIntent actionIntent(String action, int requestCode) {
@@ -235,15 +243,8 @@ public class ConnectionMonitorService extends Service {
             if (ACTION_EXIT.equals(action)) {
                 checking = false;
                 handler.removeCallbacks(loop);
-
-                // Close only MCP Control. Do not touch MCP, Proxy, Tunnel, or watchdog.
                 stopForeground(true);
                 stopSelf();
-                Intent close = new Intent(this, MainActivity.class);
-                close.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                close.putExtra("close_from_notification", true);
-                startActivity(close);
                 return START_NOT_STICKY;
             }
         }
