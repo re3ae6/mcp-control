@@ -18,10 +18,12 @@ public final class McpBridge {
         boolean emergencyKilled = prefs.getBoolean("emergency_killed", false);
         boolean readOnly = "status".equals(command) || "policy".equals(command);
         boolean unlock = "unlock".equals(command);
+        boolean exit = "exit".equals(command);
 
         // Emergency controls are local and fail closed. Read-only status/policy
         // remain available for visibility; only an explicit Unlock can clear the stop.
-        if ((emergencyLocked || emergencyKilled) && !readOnly && !unlock && !"lock".equals(command)) {
+        if ((emergencyLocked || emergencyKilled) && !readOnly && !unlock
+                && !"lock".equals(command) && !exit) {
             prefs.edit()
                     .putString("last_error", "Emergency lock active: command denied.")
                     .putLong("last_error_at", System.currentTimeMillis())
