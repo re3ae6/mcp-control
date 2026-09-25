@@ -18,18 +18,25 @@ public class PluginResultsReceiver extends BroadcastReceiver {
             return;
         }
 
-        Bundle b = intent.getBundleExtra(PluginResultsService.BUNDLE);
-        if (b == null) {
-            diagnostic.putString("callback_state", "bundle_missing").apply();
+        String command = intent.getStringExtra("mcp_control_command");
+        String token = intent.getStringExtra("com.re3ae6.mcpcontrol.TOKEN");
+        if (command == null || command.isEmpty() || token == null || token.isEmpty()) {
+            diagnostic.putString("callback_state", "callback_missing_identity").apply();
+            return;
+        }
+        String expected = context.getSharedPreferences("bridge", Context.MODE_PRIVATE)
+                .getString("callback_token_" + command, "");
+        if (expected.isEmpty() || !expected.equals(token)) {
+            diagnostic.putString("callback_state", "callback_token_mismatch").apply();
             return;
         }
 
-        String stdout = b.getString(PluginResultsService.STDOUT, "");
-        String stderr = b.getString(PluginResultsService.STDERR, "");
-        int exit = b.getInt(PluginResultsService.EXIT, -1);
-        int errorCode = b.getInt(PluginResultsService.ERR, -1);
-        String errorMessage = b.getString(PluginResultsService.ERRMSG, "");
-        String command = intent.getStringExtra("mcp_control_command");
+        Bundle b = intent.getBundleExtra(PluginResultsService.BUNDLE);
+        String stdout = b == null ? intent.getStringExtra("com.re3ae6.mcpcontrol.STDOUT") : b.getString(PluginResultsService.STDOUT, "");
+        String stderr = b == null ? intent.getStringExtra("com.re3ae6.mcpcontrol.STDERR") : b.getString(PluginResultsService.STDERR, "");
+        int exit = b == null ? intent.getIntExtra("com.re3ae6.mcpcontrol.EXIT", -1) : b.getInt(PluginResultsService.EXIT, -1);
+        int errorCode = b == null ? intent.getIntExtra("com.re3ae6.mcpcontrol.ERROR_CODE", -1) : b.getInt(PluginResultsService.ERR, -1);
+        String errorMessage = b == null ? intent.getStringExtra("com.re3ae6.mcpcontrol.ERROR_MESSAGE") : b.getString(PluginResultsService.ERRMSG, "");
 
         android.content.SharedPreferences.Editor e =
                 context.getSharedPreferences("bridge", Context.MODE_PRIVATE).edit()
