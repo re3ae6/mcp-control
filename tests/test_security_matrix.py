@@ -17,6 +17,7 @@ from core.capability_map import (
     capability_for_tool,
     git_capability_for_command,
     file_capabilities_for_path,
+    file_capabilities_for_params,
 )
 
 
@@ -76,6 +77,19 @@ class SecurityMatrixTests(unittest.TestCase):
         for p in reversed(self.patches):
             p.stop()
         self.tmp.cleanup()
+
+    def test_image_process_is_a_file_operation_not_a_camera_operation(self):
+        self.assertEqual(capability_for_tool("image_process"), "files.read")
+        caps = file_capabilities_for_params(
+            "image_process",
+            {
+                "input": "/storage/emulated/0/Download/Chatgpt/photo.png",
+                "output": "/storage/emulated/0/Download/Chatgpt/probe.png",
+            },
+        )
+        self.assertIn("files.read", caps)
+        self.assertIn("files.write", caps)
+        self.assertNotIn("device.camera", caps)
 
     def test_custom_folder_requires_operation_and_scope(self):
         p = policy.load_policy()
