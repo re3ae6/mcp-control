@@ -12,7 +12,8 @@ def git_capability_for_command(command):
     return None
 def file_scope(path):
     from pathlib import Path
-    p=Path(path).expanduser().resolve(); h=Path.home()
+    from .policy import canonical_runtime_path
+    p=canonical_runtime_path(path); h=Path.home()
     try:
         from .policy import load_policy, decision
         policy=load_policy()
