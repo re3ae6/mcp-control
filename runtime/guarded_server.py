@@ -6,6 +6,7 @@ import base64
 import mimetypes
 from pathlib import Path
 import json
+import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.enforcer import check, record, request_approval_bundle, consume_approval_bundle
@@ -53,6 +54,27 @@ def _image_mime(data, name):
     mime=mimetypes.guess_type(name)[0] or 'application/octet-stream'
     return mime if mime.startswith('image/') else None
 
+def _image_text_preview(path):
+    # Text-only fallback for MCP clients that cannot surface ImageContent.
+    try:
+        r = subprocess.run(
+            ['magick', str(path), '-resize', '72x40!', '-colorspace', 'Gray',
+             '-depth', '8', 'gray:-'],
+            capture_output=True,
+            timeout=8,
+        )
+        if r.returncode or len(r.stdout) < 72 * 40:
+            return None
+        ramp = ' .:-=+*#%@'
+        rows = []
+        data = r.stdout[:72 * 40]
+        for y in range(40):
+            row = data[y * 72:(y + 1) * 72]
+            rows.append(''.join(ramp[(v * (len(ramp) - 1)) // 255] for v in row))
+        return '\n'.join(rows)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
 def _image_read_result(params):
     raw=(params.get('input') or params.get('path') or '') if isinstance(params,dict) else ''
     if not isinstance(raw,str) or not raw.strip(): return {'content':[{'type':'text','text':'MCP CONTROL: missing image input'}],'isError':True}
@@ -86,7 +108,11 @@ def guarded_call(session,name,params,on_progress=None):
                             return {'content':[{'type':'text','text':f'MCP CONTROL: access denied ({cap}); policy is active'}],'isError':True}
                     for cap in decisions:
                         record(cap,f'mcp.tools/call:{name}','ALLOW')
-                    return _image_read_result({'path':str(path)})
+                    result = _image_read_result({'path':str(path)})
+                    preview = _image_text_preview(path)
+                    if preview:
+                        result['content'].append({'type':'text','text':f'Preview (72x40 grayscale):\\n{preview}'})
+                    return result
             except OSError:
                 pass
     if name=='image_list':
