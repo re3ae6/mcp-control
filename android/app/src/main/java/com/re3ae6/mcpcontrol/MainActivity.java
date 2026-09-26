@@ -828,9 +828,17 @@ public class MainActivity extends Activity {
             }
         }
 
-        addSectionHeader("File Operations", paths != null && paths.length() > 0
-                ? "Scope shown on every operation"
-                : "No selected-folder scope");
+        TextView operationsHeader = text("File Operations", 12, TEXT);
+        operationsHeader.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        operationsHeader.setPadding(dp(2), dp(10), dp(2), dp(1));
+        box.addView(operationsHeader);
+        TextView operationsScope = text(
+                paths != null && paths.length() > 0
+                        ? "Each row shows its exact selected-folder scope."
+                        : "No selected-folder scope.",
+                8, MUTED);
+        operationsScope.setPadding(dp(2), 0, dp(2), dp(5));
+        box.addView(operationsScope);
 
         String[] ids = {
                 "files.read", "files.write", "files.list", "files.search",
