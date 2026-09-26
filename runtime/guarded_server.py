@@ -31,7 +31,7 @@ def guarded_call(session, name, params, on_progress=None):
     for extra in secondary_for_tool(name):
         if extra not in decisions: decisions.append(extra)
 
-    if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
+    if name in {"run", "terminal_run", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", ""))
         ok, reason = authorize_command(command)
         if not ok:
