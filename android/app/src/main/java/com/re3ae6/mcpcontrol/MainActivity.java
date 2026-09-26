@@ -568,13 +568,16 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if ("files".equals(group)) addCustomStorageCard(locked);
+        if ("files".equals(group)) {
+            addCustomStorageCard(locked);
+            addSelectedFolderPermissionsCard(locked);
+        }
 
         JSONObject caps = policy == null ? null : policy.optJSONObject("capabilities");
         JSONArray a = caps == null ? null : caps.optJSONArray(group);
         int n = a == null ? 0 : a.length();
 
-        addSectionHeader(labels[indexOf(group)],
+        addSectionHeader("files".equals(group) ? "Path Scopes" : labels[indexOf(group)],
                 locked ? (n + " permissions • MASTER LOCK") : (n + " permissions"));
         if (n == 0) {
             content.addView(text("No capabilities in this group.", 12, MUTED));
@@ -583,7 +586,12 @@ public class MainActivity extends Activity {
 
         for (int i = 0; i < n; i++) {
             JSONObject x = a.optJSONObject(i);
-            if (x != null) addCapabilityRow(x, locked);
+            if (x == null) continue;
+            String id = x.optString("id", "");
+            if ("files".equals(group) && (isFileOperationCapability(id) || "files.custom".equals(id))) {
+                continue;
+            }
+            addCapabilityRow(x, locked);
         }
     }
 
@@ -659,6 +667,92 @@ public class MainActivity extends Activity {
         if ("ask".equals(s)) return YELLOW;
         return RED;
     }
+    private boolean isFileOperationCapability(String id) {
+        return "files.list".equals(id) || "files.read".equals(id) || "files.search".equals(id)
+                || "files.context".equals(id) || "files.history".equals(id)
+                || "files.changes".equals(id) || "files.write".equals(id)
+                || "files.mkdir".equals(id);
+    }
+
+    private JSONObject findCapability(String id) {
+        if (policy == null) return null;
+        JSONObject caps = policy.optJSONObject("capabilities");
+        if (caps == null) return null;
+        for (String g : groups) {
+            JSONArray a = caps.optJSONArray(g);
+            if (a == null) continue;
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject x = a.optJSONObject(i);
+                if (x != null && id.equals(x.optString("id", ""))) return x;
+            }
+        }
+        return null;
+    }
+
+    private String fileOperationLabel(String id) {
+        if ("files.read".equals(id)) return "Read files";
+        if ("files.write".equals(id)) return "Write files";
+        if ("files.list".equals(id)) return "List files";
+        if ("files.search".equals(id)) return "Search files";
+        if ("files.mkdir".equals(id)) return "Create folders";
+        if ("files.context".equals(id)) return "Read context";
+        if ("files.history".equals(id)) return "File history";
+        if ("files.changes".equals(id)) return "List changes";
+        return id;
+    }
+
+    private void addScopedFileCapabilityRow(LinearLayout host, String id, String name,
+                                             String scopeText, boolean locked) {
+        JSONObject x = findCapability(id);
+        if (x == null) return;
+        String state = x.optString("state", "deny");
+
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(4));
+
+        LinearLayout nameBox = new LinearLayout(this);
+        nameBox.setOrientation(LinearLayout.VERTICAL);
+        TextView title = text(name, 11, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        nameBox.addView(title, new LinearLayout.LayoutParams(-1, dp(20)));
+        TextView scope = text(scopeText, 8, MUTED);
+        nameBox.addView(scope, new LinearLayout.LayoutParams(-1, dp(18)));
+        row.addView(nameBox, new LinearLayout.LayoutParams(0, dp(42), 1));
+
+        LinearLayout choices = new LinearLayout(this);
+        choices.setGravity(Gravity.CENTER_VERTICAL);
+        addStateButton(choices, "Deny", "deny", id, state, locked);
+        addStateButton(choices, "Ask", "ask", id, state, locked);
+        addStateButton(choices, "Allow", "allow", id, state, locked);
+        row.addView(choices, new LinearLayout.LayoutParams(dp(174), dp(38)));
+        host.addView(row);
+    }
+
+    private void addSelectedFolderPermissionsCard(boolean locked) {
+        addSectionHeader("Selected Folder Permissions",
+                locked ? "MASTER LOCK" : "Scope: folders listed above");
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(7), dp(10), dp(8));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(0, dp(3), 0, dp(5));
+        content.addView(box, bp);
+
+        JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
+        String scope = (paths != null && paths.length() > 0)
+                ? "Selected folder(s)"
+                : "No folder selected";
+
+        String[] ids = {
+                "files.read", "files.write", "files.list", "files.search",
+                "files.mkdir", "files.context", "files.history", "files.changes"
+        };
+        for (String id : ids) addScopedFileCapabilityRow(box, id, fileOperationLabel(id), scope, locked);
+    }
+
 
     private void addStateButton(LinearLayout row,String label,String target,String id,String current,boolean locked) {
         boolean selected=target.equals(current);
@@ -751,6 +845,15 @@ public class MainActivity extends Activity {
             rm.setMinimumWidth(0);
             pr.addView(rm, new LinearLayout.LayoutParams(dp(48), dp(30)));
             box.addView(pr);
+        }
+
+        JSONObject customScope = findCapability("files.custom");
+        if (customScope != null) {
+            addScopedFileCapabilityRow(box, "files.custom", "Selected Folder Access",
+                    (paths != null && paths.length() > 0)
+                            ? "Applies only to the folders listed above"
+                            : "Add a folder above to create the scope",
+                    locked);
         }
     }
 
