@@ -342,7 +342,7 @@ class SecurityMatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             image_path = Path(d) / "nested" / "photo.jpg"
             image_path.parent.mkdir()
-            image_path.write_bytes(b"\\x89PNG\\r\\n\\x1a\\nimage")
+            image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage")
             before = sorted(str(x.relative_to(Path(d))) for x in Path(d).rglob("*"))
             with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
                 result = module.guarded_call(None, "read", {"path": str(image_path)})
