@@ -6,7 +6,7 @@ from pathlib import Path
 
 ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control", "~/.config/mcp-control"))
 PO_RECORDER_ROOT = Path(os.path.expanduser("~/po_recorder")).resolve()
-BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev")
+BLOCKED_PREFIXES = ("/system", "/vendor", "/proc", "/sys", "/dev")
 DANGEROUS = {"rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
 SHELL_WRAPPERS = {"sh", "bash", "zsh", "fish"}
 INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"}
