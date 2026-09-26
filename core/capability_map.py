@@ -12,6 +12,15 @@ def git_capability_for_command(command):
 def file_scope(path):
     from pathlib import Path
     p=Path(path).expanduser().resolve(); h=Path.home()
+    try:
+        from .policy import load_policy, decision
+        policy=load_policy()
+        if decision(policy, "files.custom") == "allow":
+            for custom in policy.get("custom_paths", []):
+                root=Path(custom).expanduser().resolve()
+                if p==root or root in p.parents: return "files.custom"
+    except Exception:
+        pass
     for root,cap in ((h/"po_recorder"/"data","files.repo_data"),(h/"po_recorder"/"tools","files.repo_tools"),(h/"po_recorder"/"reports","files.repo_reports"),(h/"po_recorder"/"tmp","files.repo_tmp"),(h/"tunnel-client-install","files.tunnel_install"),(Path("/sdcard"),"files.shared_storage"),(h/"po_recorder","files.repo"),(h/"mcp-control","files.control"),(h,"files.home")):
         root=root.resolve()
         if p==root or root in p.parents: return cap
