@@ -52,6 +52,24 @@ run_control() {
     policy)
       PYTHONPATH="$REPO" python3 -c 'import json; from core.policy import load_policy; print(json.dumps(load_policy()))'
       ;;
+    add_path)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import sys, json
+from core.trusted_control import add_custom_path
+add_custom_path(sys.argv[1])
+print(json.dumps({"ok":True,"path":sys.argv[1]}))
+PY
+      ;;
+    remove_path)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import sys, json
+from core.trusted_control import remove_custom_path
+remove_custom_path(sys.argv[1])
+print(json.dumps({"ok":True,"path":sys.argv[1]}))
+PY
+      ;;
     set)
       [ -n "${2:-}" ] && [ -n "${3:-}" ] || return 2
       case "$3" in deny|ask|allow) ;; *) return 2 ;; esac
