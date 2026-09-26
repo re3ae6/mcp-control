@@ -288,6 +288,7 @@ class SecurityMatrixTests(unittest.TestCase):
     def _guarded_module(self):
         fake_core = types.ModuleType("termux_mcp.mcp_core")
         fake_core.call_tool = mock.Mock(return_value={"ok": True})
+        fake_core.tool_list = mock.Mock(return_value={"tools": []})
         fake_server = types.ModuleType("termux_mcp.mcp_server")
         fake_server.run_http = mock.Mock()
         fake_pkg = types.ModuleType("termux_mcp")
@@ -301,6 +302,29 @@ class SecurityMatrixTests(unittest.TestCase):
             import importlib
             sys.modules.pop("runtime.guarded_server", None)
             return importlib.import_module("runtime.guarded_server")
+
+    def test_image_read_is_scoped_file_read_and_returns_image_content(self):
+        module = self._guarded_module()
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt"]
+        p["capabilities"]["files"] = [
+            {"id": "files.custom", "state": "allow"},
+            {"id": "files.read", "state": "allow"},
+            {"id": "files.write", "state": "deny"},
+        ]
+        policy.save_policy(p)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as image_file:
+            image_file.write(b"fake-png-bytes")
+            image_path = Path(image_file.name)
+        try:
+            with patch.object(module, "record") as record:
+                result = module.guarded_call(None, "image_read", {"input": str(image_path)})
+            self.assertTrue(result["isError"])
+            self.assertIn("files.custom", result["content"][0]["text"])
+            record.assert_called()
+        finally:
+            image_path.unlink(missing_ok=True)
 
     def test_guarded_server_deny_never_executes_original(self):
         module = self._guarded_module()
