@@ -70,6 +70,25 @@ def guarded_tool_list():
     return {'tools':tools}
 
 def guarded_call(session,name,params,on_progress=None):
+    # Reuse the existing read tool for images so MCP clients with a static
+    # tool catalog still receive native ImageContent without a new tool name.
+    if name=='read':
+        raw=params.get('path','') if isinstance(params,dict) else ''
+        path=_canonical_runtime_path(raw)
+        if path.is_file():
+            try:
+                data=path.read_bytes()
+                if _image_mime(data,path.name):
+                    decisions=['files.read',file_scope(path)]
+                    for cap in decisions:
+                        if not check(cap).allowed:
+                            record(cap,f'mcp.tools/call:{name}','DENY')
+                            return {'content':[{'type':'text','text':f'MCP CONTROL: access denied ({cap}); policy is active'}],'isError':True}
+                    for cap in decisions:
+                        record(cap,f'mcp.tools/call:{name}','ALLOW')
+                    return _image_read_result({'path':str(path)})
+            except OSError:
+                pass
     if name=='image_list':
         decisions=['files.list',file_scope(_canonical_runtime_path(params.get('path','') if isinstance(params,dict) else ''))]
         for cap in decisions:
