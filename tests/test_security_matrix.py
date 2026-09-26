@@ -40,6 +40,18 @@ class SecurityMatrixTests(unittest.TestCase):
                     {"id": "terminal.process", "state": "allow"},
                     {"id": "terminal.run", "state": "deny"},
                 ],
+                "files": [
+                    {"id": "files.custom", "state": "deny"},
+                    {"id": "files.read", "state": "deny"},
+                    {"id": "files.write", "state": "deny"},
+                    {"id": "files.list", "state": "deny"},
+                    {"id": "files.search", "state": "deny"},
+                    {"id": "files.mkdir", "state": "deny"},
+                    {"id": "files.context", "state": "deny"},
+                    {"id": "files.history", "state": "deny"},
+                    {"id": "files.changes", "state": "deny"},
+                    {"id": "files.shared_storage", "state": "deny"},
+                ],
                 "mcp": [
                     {"id": "mcp.execute", "state": "deny"},
                 ]
@@ -84,6 +96,55 @@ class SecurityMatrixTests(unittest.TestCase):
             file_capabilities_for_path("write", "/storage/emulated/0/Download/Chatgpt/out.jsonl"),
             ["files.write", "files.custom"],
         )
+
+    def test_selected_folder_is_exact_scope_and_sibling_is_denied(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt/"]
+        policy.save_policy(p)
+
+        trusted_control._sync_custom_storage_capabilities(p)
+
+        self.assertEqual(
+            file_capabilities_for_path("read", "/storage/emulated/0/Download/Chatgpt/data.jsonl"),
+            ["files.read", "files.custom"],
+        )
+        self.assertEqual(
+            file_capabilities_for_path("write", "/storage/emulated/0/Download/Chatgpt/out.jsonl"),
+            ["files.write", "files.custom"],
+        )
+        self.assertEqual(
+            file_capabilities_for_path("read", "/storage/emulated/0/Download/other.jsonl"),
+            ["files.read", "files.shared_storage"],
+        )
+
+    def test_selected_folder_auto_grants_basic_file_operations_only(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        trusted_control.add_custom_path("/storage/emulated/0/Download/Chatgpt/")
+        p = policy.load_policy()
+
+        for capability_id in ("files.custom", "files.read", "files.write", "files.list", "files.search"):
+            self.assertEqual(policy.decision(p, capability_id), "allow", capability_id)
+        for capability_id in ("files.mkdir", "files.context", "files.history", "files.changes", "files.shared_storage"):
+            self.assertEqual(policy.decision(p, capability_id), "deny", capability_id)
+
+    def test_selected_folder_root_cannot_be_granted(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        policy.save_policy(p)
+        with self.assertRaisesRegex(ValueError, "custom_path_must_be_specific_folder"):
+            trusted_control.add_custom_path("/storage/emulated/0")
+
+    def test_selected_folder_removal_revokes_basic_file_operations(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        policy.save_policy(p)
+        trusted_control.add_custom_path("/storage/emulated/0/Download/Chatgpt")
+        trusted_control.remove_custom_path("/storage/emulated/0/Download/Chatgpt/")
+        p = policy.load_policy()
+        for capability_id in ("files.custom", "files.read", "files.write", "files.list", "files.search"):
+            self.assertEqual(policy.decision(p, capability_id), "deny", capability_id)
 
     def test_custom_path_does_not_enable_shared_storage(self):
         p = policy.load_policy()
