@@ -64,8 +64,8 @@ public class MainActivity extends Activity {
     private static final int RED = 0xffc84b4b;
     private static final int YELLOW = 0xffa87308;
 
-    private final String[] groups = {"overview","files","git","terminal","network","mcp","device","dangerous"};
-    private final String[] labels = {"Overview","Files","Git","Terminal","Network","MCP","Device","Dangerous"};
+    private final String[] groups = {"overview","files","actions","git","terminal","network","mcp","device","dangerous"};
+    private final String[] labels = {"Overview","Files","Actions","Git","Terminal","Network","MCP","Device","Dangerous"};
     private static final int RUN_COMMAND_PERMISSION_REQUEST = 4101;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 4102;
     private static final long CONNECTION_FRESH_MS = 20000L;
@@ -437,6 +437,31 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void addActionCard(String title, String subtitle, View.OnClickListener listener, boolean locked) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(9), dp(10), dp(9));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.setMargins(0, dp(3), 0, dp(3));
+        content.addView(box, p);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView t = text(title, 13, TEXT);
+        t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        row.addView(t, new LinearLayout.LayoutParams(0, dp(30), 1));
+        Button b = button(locked ? "Locked" : "Run", locked ? null : listener);
+        b.setEnabled(!locked);
+        b.setTextColor(locked ? MUTED : TEXT);
+        b.setBackground(bg(locked ? CARD_SOFT : CARD_SOFT, BORDER, 16));
+        row.addView(b, new LinearLayout.LayoutParams(dp(78), dp(34)));
+        box.addView(row);
+        TextView s = text(subtitle, 9, MUTED);
+        s.setPadding(0, dp(3), 0, 0);
+        box.addView(s);
+    }
+
     private void addCard(String title, String subtitle) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -574,6 +599,15 @@ public class MainActivity extends Activity {
             addSelectedFolderCard(locked);
             addImageWorkspaceCard(locked);
             addPathScopesCard(locked);
+            return;
+        }
+
+        if ("actions".equals(group)) {
+            addSectionHeader("Actions", locked ? "MASTER LOCK • controls remain visible" : "operational controls");
+            addActionCard("Connect / Refresh", "Refresh the connection state without changing the research checkout.", () -> refresh(), false);
+            addActionCard("Restart MCP", "Restart the guarded MCP runtime and recover the local connection path.", () -> runAction("restart", 1900), locked);
+            addActionCard("Approvals", "Review pending one-shot approval requests.", () -> loadApprovals(), false);
+            addActionCard("Audit", "Inspect recent control-plane audit entries.", () -> loadAudit(), false);
             return;
         }
 
