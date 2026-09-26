@@ -42,14 +42,25 @@ def _image_list_result(params):
         except OSError: pass
     return {'content':[{'type':'text','text':json.dumps({'ok':True,'folder':str(folder),'images':images},ensure_ascii=False)}]}
 
+def _image_mime(data, name):
+    # Prefer actual file signature over filename; Android downloads can be mislabeled.
+    if data.startswith(b'\x89PNG\r\n\x1a\n'): return 'image/png'
+    if data.startswith(b'\xff\xd8\xff'): return 'image/jpeg'
+    if data.startswith((b'GIF87a', b'GIF89a')): return 'image/gif'
+    if data.startswith(b'BM'): return 'image/bmp'
+    if len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP': return 'image/webp'
+    if len(data) >= 12 and data[4:8] == b'ftyp' and data[8:12] in {b'heic',b'heix',b'hevc',b'hevx',b'mif1',b'msf1'}: return 'image/heic'
+    mime=mimetypes.guess_type(name)[0] or 'application/octet-stream'
+    return mime if mime.startswith('image/') else None
+
 def _image_read_result(params):
     raw=(params.get('input') or params.get('path') or '') if isinstance(params,dict) else ''
     if not isinstance(raw,str) or not raw.strip(): return {'content':[{'type':'text','text':'MCP CONTROL: missing image input'}],'isError':True}
     path=_canonical_runtime_path(raw)
     if not path.is_file(): return {'content':[{'type':'text','text':f'MCP CONTROL: image not found: {path}'}],'isError':True}
-    mime=mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
-    if not mime.startswith('image/'): return {'content':[{'type':'text','text':f'MCP CONTROL: not an image: {path}'}],'isError':True}
-    data=base64.b64encode(path.read_bytes()).decode('ascii')
+    raw_data=path.read_bytes(); mime=_image_mime(raw_data,path.name)
+    if not mime: return {'content':[{'type':'text','text':f'MCP CONTROL: not an image: {path}'}],'isError':True}
+    data=base64.b64encode(raw_data).decode('ascii')
     return {'content':[{'type':'image','data':data,'mimeType':mime},{'type':'text','text':f'Image: {path.name}'}]}
 
 def guarded_tool_list():
