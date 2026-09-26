@@ -574,8 +574,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        JSONObject caps = policy == null ? null : policy.optJSONObject(group);
-        JSONArray a = caps == null ? null : caps.optJSONArray(group);
+        JSONArray a = capabilitiesForGroup(group);
         int n = a == null ? 0 : a.length();
 
         addSectionHeader(labels[indexOf(group)],
