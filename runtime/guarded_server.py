@@ -17,6 +17,7 @@ from core.capability_map import (
     git_capability_for_command,
     file_capabilities_for_path,
     file_capabilities_for_params,
+    file_scope,
 )
 from termux_mcp import mcp_core, mcp_server
 
