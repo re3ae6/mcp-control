@@ -164,6 +164,9 @@ public class MainActivity extends Activity {
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .putBoolean("activity_visible", true).apply();
         applyMonitorSnapshot();
+        if (checkSelfPermission("com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED) {
+            startConnectionMonitor();
+        }
         loadCachedPolicy();
         render();
         handler.removeCallbacks(uiMonitorTicker);
