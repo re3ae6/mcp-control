@@ -9,15 +9,15 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.enforcer import check, record, request_approval_bundle, consume_approval_bundle
-from core.policy import canonical_custom_path
+from core.policy import canonical_runtime_path
 from core.command_guard import authorize_command
 from core.capability_map import capability_for_tool, secondary_for_tool, git_capability_for_command, file_capabilities_for_path, file_capabilities_for_params, file_scope
 from termux_mcp import mcp_core, mcp_server
 
 def _canonical_runtime_path(raw):
     if not isinstance(raw, str) or not raw.strip(): return Path('.').resolve()
-    try: return canonical_custom_path(raw)
-    except ValueError: return Path(raw).expanduser().resolve()
+    try: return canonical_runtime_path(raw)
+    except (OSError, ValueError): return Path(raw).expanduser().resolve()
 
 def _request_path(params):
     raw = params.get('path', '.') if isinstance(params, dict) else '.'
