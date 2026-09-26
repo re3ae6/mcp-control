@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.enforcer import check, record, request_approval_bundle, consume_approval_bundle
+from core.policy import canonical_custom_path
 from core.command_guard import authorize_command
 from core.capability_map import (
     capability_for_tool,
@@ -25,7 +26,7 @@ from termux_mcp import mcp_core, mcp_server
 
 def _request_path(params):
     raw = params.get("path", ".") if isinstance(params, dict) else "."
-    return Path(raw).expanduser().resolve() if isinstance(raw, str) and raw.strip() else Path(".").resolve()
+    return canonical_custom_path(raw) if isinstance(raw, str) and raw.strip() else Path(".").resolve()
 
 
 def _file_decisions(name, params):
@@ -65,7 +66,7 @@ def _image_list_result(params):
     raw = params.get("path", "") if isinstance(params, dict) else ""
     if not isinstance(raw, str) or not raw.strip():
         return {"content": [{"type": "text", "text": "MCP CONTROL: missing image folder path"}], "isError": True}
-    folder = Path(raw).expanduser().resolve()
+    folder = canonical_custom_path(raw)
     if not folder.is_dir():
         return {"content": [{"type": "text", "text": f"MCP CONTROL: image folder not found: {folder}"}], "isError": True}
     exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic", ".heif"}
@@ -86,10 +87,10 @@ def _image_list_result(params):
     )}]}
 
 def _image_read_result(params):
-    raw = params.get("input", "") if isinstance(params, dict) else ""
+    raw = (params.get("input") or params.get("path") or "") if isinstance(params, dict) else ""
     if not isinstance(raw, str) or not raw.strip():
         return {"content": [{"type": "text", "text": "MCP CONTROL: missing image input"}], "isError": True}
-    path = Path(raw).expanduser().resolve()
+    path = canonical_custom_path(raw)
     if not path.is_file():
         return {"content": [{"type": "text", "text": f"MCP CONTROL: image not found: {path}"}], "isError": True}
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
@@ -112,7 +113,7 @@ def guarded_tool_list():
 def guarded_call(session, name, params, on_progress=None):
     if name == "image_list":
         raw = params.get("path", "") if isinstance(params, dict) else ""
-        decisions = ["files.list", file_scope(Path(raw).expanduser().resolve())]
+        decisions = ["files.list", file_scope(canonical_custom_path(raw))]
         for required_cap in decisions:
             d = check(required_cap)
             if not d.allowed:
