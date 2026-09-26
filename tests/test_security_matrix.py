@@ -216,8 +216,8 @@ class SecurityMatrixTests(unittest.TestCase):
     def test_approval_bundle_is_atomic_and_one_shot(self):
         p = policy.load_policy()
         p["master_lock"] = False
-        p["capabilities"]["terminal"].append({"id": "terminal.run", "state": "ask"})
-        p["capabilities"]["mcp"].append({"id": "mcp.execute", "state": "ask"})
+        policy.set_state(p, "terminal.run", "ask")
+        policy.set_state(p, "mcp.execute", "ask")
         policy.save_policy(p)
 
         params = {"cmd": "echo ok"}
