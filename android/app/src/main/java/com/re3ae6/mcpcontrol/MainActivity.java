@@ -707,7 +707,7 @@ public class MainActivity extends Activity {
             final String p = paths.optString(i, ""); if (p.isEmpty()) continue;
             LinearLayout pr = new LinearLayout(this); pr.setGravity(Gravity.CENTER_VERTICAL);
             TextView pt = text("🟢  " + p, 10, TEXT); pr.addView(pt, new LinearLayout.LayoutParams(0, dp(30), 1));
-            Button rm = button("Remove", v -> runCustomPath("remove_path", p)); rm.setEnabled(!locked && !busy); rm.setTextSize(9);
+            Button rm = button("❌", v -> runCustomPath("remove_path", p)); rm.setEnabled(!locked && !busy); rm.setTextSize(14);
             pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30))); box.addView(pr);
         }
     }
