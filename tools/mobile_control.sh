@@ -98,10 +98,10 @@ except PermissionError as e:
 PY
       ;;
     start|connect)
-      env MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
+      "$HOME/po_recorder/tools/connect_mcp.sh"
       ;;
     restart)
-      env MCP_FORCE_RESTART=1 MCP_SKIP_GIT_PULL=1 "$HOME/po_recorder/tools/connect_mcp.sh"
+      env MCP_FORCE_RESTART=1 "$HOME/po_recorder/tools/connect_mcp.sh"
       ;;
     approvals)
       PYTHONPATH="$REPO" python3 - <<'PY'
