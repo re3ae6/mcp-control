@@ -604,10 +604,10 @@ public class MainActivity extends Activity {
 
         if ("actions".equals(group)) {
             addSectionHeader("Actions", locked ? "MASTER LOCK • controls remain visible" : "operational controls");
-            addActionCard("Connect / Refresh", "Refresh the connection state without changing the research checkout.", () -> refresh(), false);
-            addActionCard("Restart MCP", "Restart the guarded MCP runtime and recover the local connection path.", () -> runAction("restart", 1900), locked);
-            addActionCard("Approvals", "Review pending one-shot approval requests.", () -> loadApprovals(), false);
-            addActionCard("Audit", "Inspect recent control-plane audit entries.", () -> loadAudit(), false);
+            addActionCard("Connect / Refresh", "Refresh the connection state without changing the research checkout.", v -> refresh(), false);
+            addActionCard("Restart MCP", "Restart the guarded MCP runtime and recover the local connection path.", v -> runAction("restart", 1900), locked);
+            addActionCard("Approvals", "Review pending one-shot approval requests.", v -> loadApprovals(), false);
+            addActionCard("Audit", "Inspect recent control-plane audit entries.", v -> loadAudit(), false);
             return;
         }
 
