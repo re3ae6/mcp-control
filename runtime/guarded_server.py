@@ -2,6 +2,8 @@
 """Launch termux-native-mcp behind the MCP Control policy gate."""
 from __future__ import annotations
 import sys
+import base64
+import mimetypes
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,9 +33,55 @@ def _file_decisions(name, params):
 
 
 _original = mcp_core.call_tool
+_original_tool_list = mcp_core.tool_list
+
+_IMAGE_READ_TOOL = {
+    "name": "image_read",
+    "description": "Read an image file and return the actual image as MCP ImageContent.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "input": {"type": "string", "description": "Image file path"}
+        },
+        "required": ["input"]
+    },
+}
+
+def _image_read_result(params):
+    raw = params.get("input", "") if isinstance(params, dict) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        return {"content": [{"type": "text", "text": "MCP CONTROL: missing image input"}], "isError": True}
+    path = Path(raw).expanduser().resolve()
+    if not path.is_file():
+        return {"content": [{"type": "text", "text": f"MCP CONTROL: image not found: {path}"}], "isError": True}
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    if not mime.startswith("image/"):
+        return {"content": [{"type": "text", "text": f"MCP CONTROL: not an image: {path}"}], "isError": True}
+    data = base64.b64encode(path.read_bytes()).decode("ascii")
+    return {"content": [{"type": "image", "data": data, "mimeType": mime}, {"type": "text", "text": f"Image: {path.name}"}]}
+
+def guarded_tool_list():
+    result = _original_tool_list()
+    tools = list(result.get("tools", []))
+    if not any(t.get("name") == "image_read" for t in tools):
+        tools.append(_IMAGE_READ_TOOL)
+    return {"tools": tools}
+
 
 
 def guarded_call(session, name, params, on_progress=None):
+    if name == "image_read":
+        raw = params.get("input", "") if isinstance(params, dict) else ""
+        decisions = ["files.read", file_scope(Path(raw).expanduser().resolve())]
+        for required_cap in decisions:
+            d = check(required_cap)
+            if not d.allowed:
+                record(required_cap, f"mcp.tools/call:{name}", "DENY")
+                return {"content": [{"type": "text", "text": f"MCP CONTROL: access denied ({required_cap}); policy is active"}], "isError": True}
+        for required_cap in decisions:
+            record(required_cap, f"mcp.tools/call:{name}", "ALLOW")
+        return _image_read_result(params)
+
     decisions = [capability_for_tool(name)]
     if name in {"run", "terminal_run", "terminal_send", "session_run"} and isinstance(params, dict):
         command = params.get("cmd", params.get("command", "")).strip()
@@ -104,6 +152,7 @@ def guarded_call(session, name, params, on_progress=None):
 
 
 mcp_core.call_tool = guarded_call
+mcp_core.tool_list = guarded_tool_list
 
 if __name__ == "__main__":
     mcp_server.run_http(host="127.0.0.1", port=8081)
