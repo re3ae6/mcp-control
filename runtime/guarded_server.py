@@ -24,9 +24,18 @@ from core.capability_map import (
 from termux_mcp import mcp_core, mcp_server
 
 
+def _canonical_runtime_path(raw):
+    if not isinstance(raw, str) or not raw.strip():
+        return Path(".").resolve()
+    try:
+        return canonical_custom_path(raw)
+    except ValueError:
+        return Path(raw).expanduser().resolve()
+
+
 def _request_path(params):
     raw = params.get("path", ".") if isinstance(params, dict) else "."
-    return canonical_custom_path(raw) if isinstance(raw, str) and raw.strip() else Path(".").resolve()
+    return _canonical_runtime_path(raw)
 
 
 def _file_decisions(name, params):
@@ -66,7 +75,7 @@ def _image_list_result(params):
     raw = params.get("path", "") if isinstance(params, dict) else ""
     if not isinstance(raw, str) or not raw.strip():
         return {"content": [{"type": "text", "text": "MCP CONTROL: missing image folder path"}], "isError": True}
-    folder = canonical_custom_path(raw)
+    folder = _canonical_runtime_path(raw)
     if not folder.is_dir():
         return {"content": [{"type": "text", "text": f"MCP CONTROL: image folder not found: {folder}"}], "isError": True}
     exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic", ".heif"}
@@ -90,7 +99,7 @@ def _image_read_result(params):
     raw = (params.get("input") or params.get("path") or "") if isinstance(params, dict) else ""
     if not isinstance(raw, str) or not raw.strip():
         return {"content": [{"type": "text", "text": "MCP CONTROL: missing image input"}], "isError": True}
-    path = canonical_custom_path(raw)
+    path = _canonical_runtime_path(raw)
     if not path.is_file():
         return {"content": [{"type": "text", "text": f"MCP CONTROL: image not found: {path}"}], "isError": True}
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
@@ -113,7 +122,7 @@ def guarded_tool_list():
 def guarded_call(session, name, params, on_progress=None):
     if name == "image_list":
         raw = params.get("path", "") if isinstance(params, dict) else ""
-        decisions = ["files.list", file_scope(canonical_custom_path(raw))]
+        decisions = ["files.list", file_scope(_canonical_runtime_path(raw))]
         for required_cap in decisions:
             d = check(required_cap)
             if not d.allowed:
