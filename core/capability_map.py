@@ -1,4 +1,4 @@
-""""Single source of truth for MCP tool to permission capability mappings."""
+"""Single source of truth for MCP tool to permission capability mappings."""
 TOOL_CAPABILITIES={"ls":"files.list","read":"files.read","search":"files.search","context":"files.context","history":"files.history","changes_list":"files.changes","write":"files.write","mkdir":"files.mkdir","run":"terminal.run","cancel":"terminal.cancel","session_start":"terminal.background","session_run":"terminal.run","session_poll":"terminal.poll","session_list":"terminal.list","session_kill":"terminal.kill","terminal_open":"terminal.run","terminal_run":"terminal.run","terminal_send":"terminal.run","terminal_read":"terminal.read","terminal_list":"terminal.list","terminal_close":"terminal.cancel","location":"device.location","camera_photo":"device.camera","screenshot":"device.camera","image_process":"files.read","text_extract":"files.read","sms_send":"device.sms","sms_inbox":"device.sms","clipboard_get":"device.clipboard","clipboard_set":"device.clipboard","notify":"device.notifications","toast":"device.notifications","tts_speak":"device.tts","share":"device.share","open_url":"network.internet","download":"network.internet","public_ip":"network.internet","weather":"network.internet","speedtest":"network.internet","qrcode":"network.internet","cloud_sync":"network.internet","delete":"dangerous.delete","process_kill":"dangerous.kill","smart_install":"dangerous.install","cron_list":"terminal.process","cron_add":"terminal.background","cron_remove":"dangerous.kill","git_pr":"git.diff","diff":"git.diff"}
 TOOL_SECONDARY_CAPABILITIES={"run":("mcp.execute",),"terminal_run":("mcp.execute",),"terminal_send":("mcp.execute",),"session_run":("mcp.execute",),"session_start":("mcp.long_running",),"session_poll":("mcp.read_output",),"terminal_read":("mcp.read_output",),"session_list":("mcp.process",),"terminal_list":("mcp.process",),"session_kill":("mcp.process",),"terminal_close":("mcp.long_running",),"write":("mcp.modify",),"mkdir":("mcp.create",),"delete":("mcp.delete",),"image_process":("files.write",)}
 FILE_TOOLS={"ls":"files.list","read":"files.read","search":"files.search","context":"files.context","history":"files.history","changes_list":"files.changes","write":"files.write","mkdir":"files.mkdir"}
@@ -31,16 +31,12 @@ def file_capabilities_for_path(name,path):
     if not cap: return []
     return [cap,file_scope(path)]
 def file_capabilities_for_params(name,params):
-    from pathlib import Path
     if name == "text_extract":
-        return ["files.read", file_scope(str(params.get("input", ".")))]
+        return ["files.read", file_scope(str(params.get("input",".")))]
     if name == "image_process":
-        inp=file_scope(str(params.get("input", ".")))
-        out=file_scope(str(params.get("output", ".")))
-        return ["files.read", inp, "files.write", out]
+        return ["files.read", file_scope(str(params.get("input","."))), "files.write", file_scope(str(params.get("output",".")))]
     return []
 
 CONTROL_ONLY_CAPABILITIES={"git.delete","terminal.bash","terminal.python","terminal.install","terminal.chmod","terminal.env","network.local_8081","network.local_18080","network.local_18081","network.tunnel","network.openai","network.other","device.shared_storage","device.microphone","device.contacts","device.other","dangerous.chmod"}
 AREA_TOOL_ACTIONS={"files":("ls","read","search","context","history","changes_list","write","mkdir","image_process","text_extract"),"git":("git_pr","diff","run"),"terminal":("run","cancel","session_start","session_run","session_poll","session_list","session_kill","terminal_open","terminal_run","terminal_send","terminal_read","terminal_list","terminal_close","system_info","health","process_list","cron_list","cron_add","cron_remove"),"network":("open_url","download","public_ip","weather","speedtest","qrcode","cloud_sync"),"mcp":("run","session_start","session_run","session_poll","session_list","session_kill","terminal_run","terminal_send","terminal_read","terminal_list","terminal_close"),"device":("location","camera_photo","screenshot","sms_send","sms_inbox","clipboard_get","clipboard_set","notify","toast","tts_speak","share"),"dangerous":("delete","process_kill","smart_install","cron_remove")}
 def tools_for_area(area): return AREA_TOOL_ACTIONS.get(area,())
-"
