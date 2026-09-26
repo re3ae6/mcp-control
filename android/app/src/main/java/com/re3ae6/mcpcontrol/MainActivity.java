@@ -569,15 +569,16 @@ public class MainActivity extends Activity {
         }
 
         if ("files".equals(group)) {
-            addCustomStorageCard(locked);
-            addSelectedFolderPermissionsCard(locked);
+            addSelectedFolderCard(locked);
+            addPathScopesCard(locked);
+            return;
         }
 
-        JSONObject caps = policy == null ? null : policy.optJSONObject("capabilities");
+        JSONObject caps = policy == null ? null : policy.optJSONObject(group);
         JSONArray a = caps == null ? null : caps.optJSONArray(group);
         int n = a == null ? 0 : a.length();
 
-        addSectionHeader("files".equals(group) ? "Path Scopes" : labels[indexOf(group)],
+        addSectionHeader(labels[indexOf(group)],
                 locked ? (n + " permissions • MASTER LOCK") : (n + " permissions"));
         if (n == 0) {
             content.addView(text("No capabilities in this group.", 12, MUTED));
@@ -587,10 +588,6 @@ public class MainActivity extends Activity {
         for (int i = 0; i < n; i++) {
             JSONObject x = a.optJSONObject(i);
             if (x == null) continue;
-            String id = x.optString("id", "");
-            if ("files".equals(group) && (isFileOperationCapability(id) || "files.custom".equals(id))) {
-                continue;
-            }
             addCapabilityRow(x, locked);
         }
     }
@@ -717,8 +714,12 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         nameBox.addView(title, new LinearLayout.LayoutParams(-1, dp(20)));
         TextView scope = text(scopeText, 8, MUTED);
-        nameBox.addView(scope, new LinearLayout.LayoutParams(-1, dp(18)));
-        row.addView(nameBox, new LinearLayout.LayoutParams(0, dp(42), 1));
+        scope.setSingleLine(false);
+        scope.setMaxLines(6);
+        nameBox.addView(scope, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, -2, 1);
+        np.setMargins(0, 0, dp(6), 0);
+        row.addView(nameBox, np);
 
         LinearLayout choices = new LinearLayout(this);
         choices.setGravity(Gravity.CENTER_VERTICAL);
@@ -729,9 +730,132 @@ public class MainActivity extends Activity {
         host.addView(row);
     }
 
-    private void addSelectedFolderPermissionsCard(boolean locked) {
-        addSectionHeader("Selected Folder Permissions",
-                locked ? "MASTER LOCK" : "Scope: folders listed above");
+    private void addSelectedFolderCard(boolean locked) {
+        addSectionHeader("Selected Folder", locked
+                ? "MASTER LOCK"
+                : "Only these folders are available to file operations");
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(8), dp(10), dp(9));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(0, dp(3), 0, dp(6));
+        content.addView(box, bp);
+
+        TextView hint = text(
+                "Add a specific phone folder. Adding a folder enables Read / Write / List / Search only inside that folder.",
+                9, MUTED);
+        hint.setPadding(dp(2), 0, dp(2), dp(6));
+        box.addView(hint);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        final android.widget.EditText path = new android.widget.EditText(this);
+        if (!storageSelectedPath.isEmpty()) path.setText(storageSelectedPath);
+        storagePathField = path;
+        path.setSingleLine(true);
+        path.setTextSize(12);
+        path.setHint("/storage/emulated/0/Chatgpt");
+        path.setPadding(dp(10), 0, dp(10), 0);
+        path.setBackground(bg(CARD_SOFT, BORDER, 10));
+        row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
+
+        Button browse = button("📂", v -> openStorageFolderPicker());
+        browse.setEnabled(!locked && !busy);
+        browse.setBackground(bg(CARD_SOFT, BORDER, 17));
+        browse.setTextColor(TEXT);
+        LinearLayout.LayoutParams br = new LinearLayout.LayoutParams(dp(64), dp(42));
+        br.setMargins(dp(6), 0, 0, 0);
+        row.addView(browse, br);
+
+        Button add = button("Add", v -> {
+            String p = path.getText().toString().trim();
+            if (p.isEmpty()) {
+                setStorageResult("Choose a folder or enter its absolute phone path.", RED);
+                return;
+            }
+            if (!(p.startsWith("/storage/emulated/0/") || p.startsWith("/sdcard/"))) {
+                setStorageResult("Storage path must be inside /storage/emulated/0 or /sdcard.", RED);
+                return;
+            }
+            runCustomPath("add_path", p);
+        });
+        add.setEnabled(!locked && !busy);
+        add.setBackground(bg(TEXT, TEXT, 17));
+        add.setTextColor(Color.WHITE);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(64), dp(42));
+        ap.setMargins(dp(6), 0, 0, 0);
+        row.addView(add, ap);
+        box.addView(row);
+
+        storageResult = text(storageResultMessage, 10, storageResultColor);
+        storageResult.setPadding(dp(2), dp(6), dp(2), dp(2));
+        storageResult.setVisibility(storageResultMessage.isEmpty() ? View.GONE : View.VISIBLE);
+        box.addView(storageResult);
+
+        JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
+        if (paths == null || paths.length() == 0) {
+            TextView empty = text("No folder selected.", 10, MUTED);
+            empty.setPadding(dp(2), dp(7), dp(2), dp(6));
+            box.addView(empty);
+        } else {
+            TextView selected = text("Selected folders", 9, MUTED);
+            selected.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            selected.setPadding(dp(2), dp(7), dp(2), dp(2));
+            box.addView(selected);
+            for (int i = 0; i < paths.length(); i++) {
+                final String p = paths.optString(i, "");
+                if (p.isEmpty()) continue;
+                LinearLayout pr = new LinearLayout(this);
+                pr.setGravity(Gravity.CENTER_VERTICAL);
+                TextView pt = text("🟢  " + p, 10, TEXT);
+                pt.setSingleLine(false);
+                pr.addView(pt, new LinearLayout.LayoutParams(0, -2, 1));
+                Button rm = button("Delete", v -> runCustomPath("remove_path", p));
+                rm.setEnabled(!locked && !busy);
+                rm.setTextSize(10);
+                rm.setTextColor(RED);
+                rm.setBackgroundColor(Color.TRANSPARENT);
+                rm.setGravity(Gravity.CENTER);
+                rm.setPadding(0, 0, 0, 0);
+                rm.setMinWidth(0);
+                rm.setMinimumWidth(0);
+                LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(dp(48), dp(30));
+                rp.setMargins(dp(6), 0, 0, 0);
+                pr.addView(rm, rp);
+                box.addView(pr);
+            }
+        }
+
+        addSectionHeader("File Operations", paths != null && paths.length() > 0
+                ? "Scope shown on every operation"
+                : "No selected-folder scope");
+
+        String[] ids = {
+                "files.read", "files.write", "files.list", "files.search",
+                "files.mkdir", "files.context", "files.history", "files.changes"
+        };
+        for (String id : ids) {
+            String scope = selectedFolderScopeText(paths);
+            addScopedFileCapabilityRow(box, id, fileOperationLabel(id), scope, locked);
+        }
+    }
+
+    private String selectedFolderScopeText(JSONArray paths) {
+        if (paths == null || paths.length() == 0) return "Scope: no selected folder";
+        StringBuilder b = new StringBuilder("Scope: ");
+        for (int i = 0; i < paths.length(); i++) {
+            String p = paths.optString(i, "");
+            if (p.isEmpty()) continue;
+            if (b.length() > 8) b.append("\n");
+            b.append(p);
+        }
+        return b.toString();
+    }
+
+    private void addPathScopesCard(boolean locked) {
+        addSectionHeader("Path Scopes", locked ? "MASTER LOCK" : "Explicit path boundaries");
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -741,18 +865,23 @@ public class MainActivity extends Activity {
         bp.setMargins(0, dp(3), 0, dp(5));
         content.addView(box, bp);
 
-        JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
-        String scope = (paths != null && paths.length() > 0)
-                ? "Selected folder(s)"
-                : "No folder selected";
-
-        String[] ids = {
-                "files.read", "files.write", "files.list", "files.search",
-                "files.mkdir", "files.context", "files.history", "files.changes"
-        };
-        for (String id : ids) addScopedFileCapabilityRow(box, id, fileOperationLabel(id), scope, locked);
+        JSONObject caps = policy == null ? null : policy.optJSONObject("capabilities");
+        JSONArray a = caps == null ? null : caps.optJSONArray("files");
+        boolean any = false;
+        if (a != null) {
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject x = a.optJSONObject(i);
+                if (x == null) continue;
+                String id = x.optString("id", "");
+                if (isFileOperationCapability(id) || "files.custom".equals(id)) continue;
+                any = true;
+                String name = x.optString("label", "");
+                if (name.isEmpty()) name = id;
+                addScopedFileCapabilityRow(box, id, name, "Path scope: " + name, locked);
+            }
+        }
+        if (!any) box.addView(text("No additional path scopes.", 10, MUTED));
     }
-
 
     private void addStateButton(LinearLayout row,String label,String target,String id,String current,boolean locked) {
         boolean selected=target.equals(current);
@@ -860,7 +989,7 @@ public class MainActivity extends Activity {
     private void openStorageFolderPicker() {
         try {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
             startActivityForResult(i, STORAGE_FOLDER_REQUEST);
         } catch (RuntimeException e) {
             addLogBox("Browse: " + e.getMessage());
