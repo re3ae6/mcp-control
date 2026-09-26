@@ -247,7 +247,8 @@ public class MainActivity extends Activity {
 
     private void ensureNotificationPermission() {
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
-                checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST);
+                checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, NOTIFICATION_PERMISSION_REQUEST);
         }
     }
 
@@ -496,6 +497,7 @@ public class MainActivity extends Activity {
         highlightTab();
 
         boolean locked = policy != null && policy.optBoolean("master_lock", true);
+
         if ("overview".equals(group)) {
             addConnectionSummary();
 
@@ -689,7 +691,7 @@ public class MainActivity extends Activity {
         browse.setEnabled(!locked && !busy);
         browse.setBackground(bg(CARD_SOFT, BORDER, 17));
         browse.setTextColor(TEXT);
-        LinearLayout.LayoutParams br = new LinearLayout.LayoutParams(dp(48), dp(42));
+        LinearLayout.LayoutParams br = new LinearLayout.LayoutParams(dp(72), dp(42));
         br.setMargins(dp(6), 0, 0, 0);
         row.addView(browse, br);
 
@@ -745,7 +747,8 @@ public class MainActivity extends Activity {
                         return relative.isEmpty() ? "/storage/emulated/0" : "/storage/emulated/0/" + relative;
                     }
                     return relative.isEmpty() ? "/storage/" + volume : "/storage/" + volume + "/" + relative;
-                }            }
+                }
+            }
         }
         return null;
     }
@@ -995,3 +998,203 @@ public class MainActivity extends Activity {
                             bridgeFailure(statusError);
                             return;
                         }
+                        boolean connected = applyStatusResult();
+                        if (connected) {
+                            loadPolicyAndFinish();
+                            return;
+                        }
+                        android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+                        int connectExit = bridge.getInt("exit_connect", -1);
+                        int connectErrorCode = bridge.getInt("error_code_connect", -1);
+                        long connectAt = bridge.getLong("received_at_connect", 0L);
+                        boolean connectFailed = (connectExit > 0 || connectErrorCode > 0) && connectAt > 0 &&
+                                System.currentTimeMillis() - connectAt < 5000L;
+                        if (connectFailed || attempt >= 3) {
+                            String err = commandError("connect");
+                            if (err.isEmpty()) err = bridge.getString("stderr_connect", "");
+                            if (err.isEmpty()) err = bridge.getString("stdout_connect", "");
+                            busy = false;
+                            render();
+                            if (err != null && !err.isEmpty()) {
+                                addLogBox("Connect: " + err);
+                            } else {
+                                long connectReceivedAt = bridge.getLong("received_at_connect", 0L);
+                                long statusAt = bridge.getLong("received_at_status", 0L);
+                                long connectSentAt = bridge.getLong("sent_at_connect", 0L);
+                                long statusSentAt = bridge.getLong("sent_at_status", 0L);
+                                int statusExit = bridge.getInt("exit_status", -1);
+                                int statusErrorDetail = bridge.getInt("error_code_status", -1);
+                                String statusErr = bridge.getString("error_message_status", "");
+                                String connectState = bridge.getString("callback_state_connect", "unknown");
+                                String statusState = bridge.getString("callback_state_status", "unknown");
+                                String connectStage = bridge.getString("callback_stage_connect", "");
+                                String statusStage = bridge.getString("callback_stage_status", "");
+                                String connectErr = bridge.getString("error_message_connect", "");
+                                String connectStderr = bridge.getString("stderr_connect", "");
+                                String statusStderr = bridge.getString("stderr_status", "");
+                                String detail = statusErr == null || statusErr.isEmpty() ? "No result detail returned." : statusErr;
+                                StringBuilder diag = new StringBuilder("Connect did not become ready.\\n")
+                                        .append("DISPATCH connect: ").append(connectSentAt > 0 ? "sent" : "not sent")
+                                        .append(" | callback: ").append(connectState)
+                                        .append(" | stage: ").append(connectStage.isEmpty() ? "none" : connectStage).append("\\n")
+                                        .append("DISPATCH status: ").append(statusSentAt > 0 ? "sent" : "not sent")
+                                        .append(" | callback: ").append(statusState)
+                                        .append(" | stage: ").append(statusStage.isEmpty() ? "none" : statusStage).append("\\n")
+                                        .append("RESULT status: exit=").append(statusExit)
+                                        .append(" error=").append(statusErrorDetail).append("\\n");
+                                if (connectErr != null && !connectErr.isEmpty()) diag.append("CONNECT ERROR: ").append(connectErr).append("\\n");
+                                if (connectStderr != null && !connectStderr.isEmpty()) diag.append("CONNECT STDERR: ").append(connectStderr).append("\\n");
+                                if (statusStderr != null && !statusStderr.isEmpty()) diag.append("STATUS STDERR: ").append(statusStderr).append("\\n");
+                                diag.append(detail);
+                                addLogBox(diag.toString());
+                            }
+                            return;
+                        }
+                        pollConnection(attempt + 1);
+                    }
+                }, 550L);
+            }
+        }, delay);
+    }
+
+    private boolean applyStatusResult() {
+        android.content.SharedPreferences p = getSharedPreferences("bridge", MODE_PRIVATE);
+        String out = p.getString("stdout_status", "");
+        String err = p.getString("stderr_status", "");
+        int exit = p.getInt("exit_status", -1);
+        try {
+            JSONObject o = new JSONObject(out);
+            if (o.has("mcp") || o.has("proxy") || o.has("tunnel") || o.has("connected")) {
+                long receivedAt = p.getLong("received_at_status", System.currentTimeMillis());
+                boolean ok = applyConnectionSnapshot(o, receivedAt, "activity_status");
+                requestNotificationStatusSync(o);
+                return ok;
+            }
+        } catch (Exception ignored) {}
+
+        // A missing/late callback is not a disconnect. Preserve the last known good state.
+        if (exit == -1 && (err == null || err.isEmpty())) return connectionOk;
+        return connectionOk;
+    }
+
+    private void requestNotificationStatusSync(JSONObject o) {
+        try {
+            Intent i = new Intent(this, ConnectionMonitorService.class)
+                    .setAction(ConnectionMonitorService.ACTION_STATUS_UPDATE)
+                    .putExtra("status_json", o.toString());
+            if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+        } catch (RuntimeException ignored) {}
+    }
+
+    private void loadPolicyAndFinish() {
+        loadPolicyAndFinish(0, null);
+    }
+
+    private void loadPolicyAndFinish(Runnable afterLoaded) {
+        loadPolicyAndFinish(0, afterLoaded);
+    }
+
+    private void loadPolicyAndFinish(int attempt, Runnable afterLoaded) {
+        // Do not redispatch policy while an earlier callback may still be in flight.
+        // A late callback from a previous attempt is rejected by the token guard, so
+        // repeated dispatches can accidentally discard the valid result we are waiting for.
+        clearOutput();
+        clearCommandResult("policy");
+
+        if (!McpBridge.run(this, "policy")) {
+            if (attempt < 2) {
+                handler.postDelayed(() -> loadPolicyAndFinish(attempt + 1, afterLoaded), 1000L);
+            } else {
+                operationFailure("Connected, but the policy query could not be started.");
+            }
+            return;
+        }
+
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_policy", System.currentTimeMillis());
+        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L, afterLoaded);
+    }
+
+    private void waitForPolicyResult(long sentAt, long deadline, Runnable afterLoaded) {
+        handler.postDelayed(() -> {
+            android.content.SharedPreferences bridge =
+                    getSharedPreferences("bridge", MODE_PRIVATE);
+
+            String state = bridge.getString("callback_state_policy", "unknown");
+            long receivedAt = bridge.getLong("received_at_policy", 0L);
+            String policyError = commandError("policy");
+            String out = bridge.getString("stdout_policy", "");
+            boolean loaded = false;
+
+            if (receivedAt >= sentAt && "received".equals(state)) {
+                try {
+                    JSONObject o = new JSONObject(out);
+                    if (o.has("master_lock")) {
+                        policy = o;
+                        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                                .putBoolean("master_lock", o.optBoolean("master_lock", true))
+                                .putString("policy_json", o.toString())
+                                .apply();
+                        loaded = true;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (loaded) {
+                if (afterLoaded != null) {
+                    afterLoaded.run();
+                } else {
+                    busy = false;
+                    render();
+                }
+                return;
+            }
+
+            if (!policyError.isEmpty() && receivedAt >= sentAt) {
+                busy = false;
+                render();
+                addLogBox(policyError);
+                return;
+            }
+
+            if (System.currentTimeMillis() < deadline) {
+                waitForPolicyResult(sentAt, deadline, afterLoaded);
+                return;
+            }
+
+            busy = false;
+            render();
+
+            String stateDetail = bridge.getString("callback_state_policy", "unknown");
+            String stage = bridge.getString("callback_stage_policy", "");
+            int exit = bridge.getInt("exit_policy", -1);
+            int errorCode = bridge.getInt("error_code_policy", -1);
+            String stderr = bridge.getString("stderr_policy", "");
+            String detail = stderr == null ? "" : stderr;
+
+            StringBuilder b = new StringBuilder("Policy callback timeout.\\n")
+                    .append("callback: ").append(stateDetail)
+                    .append(" | stage: ").append(stage.isEmpty() ? "none" : stage)
+                    .append("\\nreceived_at: ").append(receivedAt)
+                    .append(" | sent_at: ").append(sentAt)
+                    .append("\\nexit: ").append(exit)
+                    .append(" | error: ").append(errorCode);
+            if (!detail.isEmpty()) b.append("\\nSTDERR: ").append(detail);
+            addLogBox(b.toString());
+        }, 200L);
+    }
+
+    private void operationFailure(String message) {
+        busy = false;
+        render();
+        addLogBox(message);
+    }
+
+    private void bridgeFailure(String message) {
+        busy = false;
+        connectionOk = false;
+        lastConnectionStatus = null;
+        status.setText("●  Disconnected");
+        status.setTextColor(RED);
+        render();
