@@ -39,6 +39,21 @@ def consume_approval(
         params,
     )
 
+def request_approval_bundle(capabilities: list[str], tool: str, params) -> dict:
+    """Create one short-lived approval bound to the exact multi-capability request."""
+    return create_approval_bundle(capabilities, tool, params)
+
+
+def consume_approval_bundle(
+    approval_id: str,
+    capabilities: list[str],
+    tool: str,
+    params,
+) -> dict:
+    """Consume one exact multi-capability approval; mismatches and replay are denied."""
+    return _consume_approval_bundle(approval_id, capabilities, tool, params)
+
+
 def check(capability: str) -> Decision:
     policy = load_policy()
     state = decision(policy, capability)
