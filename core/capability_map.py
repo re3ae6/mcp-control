@@ -21,7 +21,7 @@ def file_scope(path):
                 if p==root or root in p.parents: return "files.custom"
     except Exception:
         pass
-    for root,cap in ((h/"po_recorder"/"data","files.repo_data"),(h/"po_recorder"/"tools","files.repo_tools"),(h/"po_recorder"/"reports","files.repo_reports"),(h/"po_recorder"/"tmp","files.repo_tmp"),(h/"tunnel-client-install","files.tunnel_install"),(Path("/sdcard"),"files.shared_storage"),(h/"po_recorder","files.repo"),(h/"mcp-control","files.control"),(h,"files.home")):
+    for root,cap in ((h/"po_recorder"/"data","files.repo_data"),(h/"po_recorder"/"tools","files.repo_tools"),(h/"po_recorder"/"reports","files.repo_reports"),(h/"po_recorder"/"tmp","files.repo_tmp"),(h/"tunnel-client-install","files.tunnel_install"),(Path("/sdcard"),"files.shared_storage"),(Path("/storage/emulated/0"),"files.shared_storage"),(h/"po_recorder","files.repo"),(h/"mcp-control","files.control"),(h,"files.home")):
         root=root.resolve()
         if p==root or root in p.parents: return cap
     return "dangerous.outside_allowlist"
