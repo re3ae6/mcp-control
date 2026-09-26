@@ -6,7 +6,6 @@ import base64
 import mimetypes
 from pathlib import Path
 import json
-import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.enforcer import check, record, request_approval_bundle, consume_approval_bundle
@@ -29,7 +28,6 @@ def _file_decisions(name, params):
 _original=mcp_core.call_tool
 _original_tool_list=mcp_core.tool_list
 _IMAGE_LIST_TOOL={'name':'image_list','description':'List image files currently present in a selected folder.','inputSchema':{'type':'object','properties':{'path':{'type':'string'}},'required':['path']}}
-_IMAGE_READ_TOOL={'name':'image_read','description':'Read an image file and return actual MCP ImageContent.','inputSchema':{'type':'object','properties':{'input':{'type':'string'},'path':{'type':'string'}},'anyOf':[{'required':['input']},{'required':['path']}]}}
 
 def _image_list_result(params):
     raw=params.get('path','') if isinstance(params,dict) else ''
@@ -54,40 +52,9 @@ def _image_mime(data, name):
     mime=mimetypes.guess_type(name)[0] or 'application/octet-stream'
     return mime if mime.startswith('image/') else None
 
-def _image_text_preview(path):
-    # Text-only fallback for MCP clients that cannot surface ImageContent.
-    try:
-        r = subprocess.run(
-            ['magick', str(path), '-resize', '72x40!', '-colorspace', 'Gray',
-             '-depth', '8', 'gray:-'],
-            capture_output=True,
-            timeout=8,
-        )
-        if r.returncode or len(r.stdout) < 72 * 40:
-            return None
-        ramp = ' .:-=+*#%@'
-        rows = []
-        data = r.stdout[:72 * 40]
-        for y in range(40):
-            row = data[y * 72:(y + 1) * 72]
-            rows.append(''.join(ramp[(v * (len(ramp) - 1)) // 255] for v in row))
-        return '\n'.join(rows)
-    except (OSError, subprocess.SubprocessError):
-        return None
-
-def _image_read_result(params):
-    raw=(params.get('input') or params.get('path') or '') if isinstance(params,dict) else ''
-    if not isinstance(raw,str) or not raw.strip(): return {'content':[{'type':'text','text':'MCP CONTROL: missing image input'}],'isError':True}
-    path=_canonical_runtime_path(raw)
-    if not path.is_file(): return {'content':[{'type':'text','text':f'MCP CONTROL: image not found: {path}'}],'isError':True}
-    raw_data=path.read_bytes(); mime=_image_mime(raw_data,path.name)
-    if not mime: return {'content':[{'type':'text','text':f'MCP CONTROL: not an image: {path}'}],'isError':True}
-    data=base64.b64encode(raw_data).decode('ascii')
-    return {'content':[{'type':'image','data':data,'mimeType':mime},{'type':'text','text':f'Image: {path.name}'}]}
-
 def guarded_tool_list():
     result=_original_tool_list(); tools=list(result.get('tools',[]))
-    for t in (_IMAGE_LIST_TOOL,_IMAGE_READ_TOOL):
+    for t in (_IMAGE_LIST_TOOL,):
         if not any(x.get('name')==t['name'] for x in tools): tools.append(t)
     return {'tools':tools}
 
@@ -120,13 +87,6 @@ def guarded_call(session,name,params,on_progress=None):
             if not check(cap).allowed: record(cap,f'mcp.tools/call:{name}','DENY'); return {'content':[{'type':'text','text':f'MCP CONTROL: access denied ({cap}); policy is active'}],'isError':True}
         for cap in decisions: record(cap,f'mcp.tools/call:{name}','ALLOW')
         return _image_list_result(params)
-    if name=='image_read':
-        raw=(params.get('input') or params.get('path') or '') if isinstance(params,dict) else ''
-        decisions=['files.read',file_scope(_canonical_runtime_path(raw))]
-        for cap in decisions:
-            if not check(cap).allowed: record(cap,f'mcp.tools/call:{name}','DENY'); return {'content':[{'type':'text','text':f'MCP CONTROL: access denied ({cap}); policy is active'}],'isError':True}
-        for cap in decisions: record(cap,f'mcp.tools/call:{name}','ALLOW')
-        return _image_read_result(params)
     decisions=[capability_for_tool(name)]
     if name in {'run','terminal_run','terminal_send','session_run'} and isinstance(params,dict):
         command=params.get('cmd',params.get('command','')).strip(); gc=git_capability_for_command(command)
