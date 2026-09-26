@@ -559,6 +559,8 @@ public class MainActivity extends Activity {
             return;
         }
 
+        if ("files".equals(group)) addCustomStorageCard(locked);
+
         JSONObject caps = policy == null ? null : policy.optJSONObject("capabilities");
         JSONArray a = caps == null ? null : caps.optJSONArray(group);
         int n = a == null ? 0 : a.length();
@@ -662,6 +664,44 @@ public class MainActivity extends Activity {
         row.addView(b,p);
     }
 
+    private void addCustomStorageCard(boolean locked) {
+        addSectionHeader("Storage Access", locked ? "MASTER LOCK" : "User-approved paths");
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(8), dp(10), dp(9));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(0, dp(3), 0, dp(5));
+        content.addView(box, bp);
+        TextView hint = text("Add a specific phone folder. Access stays denied unless explicitly allowed.", 9, MUTED);
+        box.addView(hint);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        final android.widget.EditText path = new android.widget.EditText(this);
+        path.setSingleLine(true); path.setTextSize(12);
+        path.setHint("/storage/emulated/0/Downloads");
+        path.setPadding(dp(10), 0, dp(10), 0);
+        path.setBackground(bg(CARD_SOFT, BORDER, 10));
+        row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
+        Button add = button("Add path", v -> { String p = path.getText().toString().trim(); if (!p.isEmpty()) runCustomPath("add_path", p); });
+        add.setEnabled(!locked && !busy); add.setBackground(bg(TEXT, TEXT, 17)); add.setTextColor(Color.WHITE);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(92), dp(42)); ap.setMargins(dp(6),0,0,0);
+        row.addView(add, ap); box.addView(row);
+        JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
+        if (paths != null) for (int i=0; i<paths.length(); i++) {
+            final String p = paths.optString(i, ""); if (p.isEmpty()) continue;
+            LinearLayout pr = new LinearLayout(this); pr.setGravity(Gravity.CENTER_VERTICAL);
+            TextView pt = text("🟢  " + p, 10, TEXT); pr.addView(pt, new LinearLayout.LayoutParams(0, dp(30), 1));
+            Button rm = button("Remove", v -> runCustomPath("remove_path", p)); rm.setEnabled(!locked && !busy); rm.setTextSize(9);
+            pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30))); box.addView(pr);
+        }
+    }
+
+    private void runCustomPath(String command, String path) {
+        if (busy) return; busy = true;
+        try { McpBridge.run(this, command, path); handler.postDelayed(() -> { busy=false; refresh(); }, 700L); }
+        catch (RuntimeException e) { busy=false; addLogBox("Storage path: " + e.getMessage()); }
+    }
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
 
     private boolean isMcpReady(JSONObject o) {
