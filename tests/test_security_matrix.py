@@ -131,6 +131,16 @@ class SecurityMatrixTests(unittest.TestCase):
         for capability_id in ("files.mkdir", "files.context", "files.history", "files.changes", "files.shared_storage"):
             self.assertEqual(policy.decision(p, capability_id), "deny", capability_id)
 
+    def test_invalid_custom_path_policy_recovers_to_default_deny(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/home/runner/private"]
+        policy.save_policy(p)
+
+        recovered = policy.load_policy()
+        self.assertTrue(recovered["master_lock"])
+        self.assertEqual(recovered.get("custom_paths", []), [])
+
     def test_selected_folder_root_cannot_be_granted(self):
         p = policy.load_policy()
         p["master_lock"] = False
