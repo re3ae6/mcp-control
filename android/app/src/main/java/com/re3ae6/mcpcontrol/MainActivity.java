@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private boolean connectionOk = false;
     private static final int STORAGE_FOLDER_REQUEST = 5101;
     private android.widget.EditText storagePathField;
+    private String storageSelectedPath = "";
     private TextView storageResult;
     private String storageResultMessage = "";
     private int storageResultColor = MUTED;
@@ -130,6 +131,7 @@ public class MainActivity extends Activity {
                 .putBoolean("monitor_enabled", true)
                 .putBoolean("activity_visible", true).apply();
 
+        storageSelectedPath = getSharedPreferences("bridge", MODE_PRIVATE).getString("storage_selected_path", "");
         loadCachedPolicy();
         buildUi();
         render();
@@ -495,6 +497,7 @@ public class MainActivity extends Activity {
     }
 
     private void render() {
+        if (storagePathField != null) { String currentPath = storagePathField.getText().toString().trim(); if (!currentPath.isEmpty()) storageSelectedPath = currentPath; }
         showConnectionHeader();
         content.removeAllViews();
         logHost = null;
@@ -686,6 +689,7 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         final android.widget.EditText path = new android.widget.EditText(this);
+        if (!storageSelectedPath.isEmpty()) path.setText(storageSelectedPath);
         storagePathField = path;
         path.setSingleLine(true);
         path.setTextSize(12);
@@ -762,10 +766,16 @@ public class MainActivity extends Activity {
             int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             if (takeFlags != 0) getContentResolver().takePersistableUriPermission(uri, takeFlags);
         } catch (RuntimeException ignored) {}
-        String path = uriToStoragePath(uri);
-        if (path != null && storagePathField != null) storagePathField.setText(path);
-    }
+        String selectedPath = uriToStoragePath(uri);
+        if (selectedPath != null) {
+            storageSelectedPath = selectedPath;
+            getSharedPreferences("bridge", MODE_PRIVATE).edit().putString("storage_selected_path", selectedPath).apply();
+            if (storagePathField != null) storagePathField.setText(selectedPath);
+        } else {
+            setStorageResult("Selected folder could not be mapped to an absolute phone path.", RED);
+        }
 
+    }
     private String uriToStoragePath(android.net.Uri uri) {
         if (uri == null) return null;
         if ("com.android.externalstorage.documents".equals(uri.getAuthority())) {
