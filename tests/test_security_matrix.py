@@ -364,7 +364,7 @@ class SecurityMatrixTests(unittest.TestCase):
         ]
         policy.save_policy(p)
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as image_file:
-            image_file.write(b"\\x89PNG\\r\\n\\x1a\\nimage")
+            image_file.write(b"\x89PNG\r\n\x1a\nimage")
             image_path = Path(image_file.name)
         try:
             with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
