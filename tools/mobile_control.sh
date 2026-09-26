@@ -61,6 +61,25 @@ add_custom_path(sys.argv[1])
 print(json.dumps({"ok":True,"path":sys.argv[1]}))
 PY
       ;;
+    image_list)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import json, sys
+from pathlib import Path
+from core.policy import load_policy
+p = Path(sys.argv[1]).expanduser().resolve(strict=False)
+policy = load_policy()
+if policy.get("master_lock", True): raise PermissionError("master_lock_active")
+roots = [Path(x).expanduser().resolve(strict=False) for x in policy.get("custom_paths", [])]
+if not any(r == p or r in p.parents for r in roots): raise PermissionError("path_outside_selected_folder")
+if not p.is_dir(): raise FileNotFoundError("folder_not_found")
+exts={".png",".jpg",".jpeg",".webp",".gif",".bmp",".heic",".heif"}
+items=[]
+for x in sorted(p.iterdir(), key=lambda q:q.stat().st_mtime, reverse=True):
+    if x.is_file() and x.suffix.lower() in exts: items.append({"name":x.name,"path":str(x),"size":x.stat().st_size})
+print(json.dumps({"ok":True,"folder":str(p),"images":items[:40]},ensure_ascii=False))
+PY
+      ;;
     image_info)
       [ -n "${2:-}" ] || return 2
       PYTHONPATH="$REPO" python3 - "$2" <<'PY'
