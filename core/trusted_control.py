@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .policy import load_policy, save_policy, set_master_lock, set_state
+from .policy import canonical_custom_path, load_policy, save_policy, set_master_lock, set_state
 
 AUDIT_FILE = Path.home() / ".config" / "mcp-control" / "control_audit.jsonl"
 
@@ -59,24 +59,7 @@ def _sync_custom_storage_capabilities(policy: dict[str, Any]) -> None:
 
 
 def _canonical_custom_path(path: str) -> str:
-    raw = str(path).strip()
-    if not raw.startswith("/"):
-        raise ValueError("custom_path_must_be_absolute")
-    try:
-        canonical = Path(raw).expanduser().resolve(strict=False)
-    except OSError as exc:
-        raise ValueError("custom_path_invalid") from exc
-
-    shared_roots = {
-        Path("/storage/emulated/0").resolve(),
-        Path("/sdcard").resolve(),
-    }
-    if canonical in shared_roots:
-        raise ValueError("custom_path_must_be_specific_folder")
-    if not any(root == canonical or root in canonical.parents for root in shared_roots):
-        raise ValueError("custom_path_outside_shared_storage")
-    return str(canonical)
-
+    return str(canonical_custom_path(path))
 
 def add_custom_path(path: str) -> None:
     canonical = _canonical_custom_path(path)
