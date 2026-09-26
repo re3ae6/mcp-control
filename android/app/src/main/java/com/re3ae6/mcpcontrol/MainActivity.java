@@ -740,10 +740,15 @@ public class MainActivity extends Activity {
             pr.setGravity(Gravity.CENTER_VERTICAL);
             TextView pt = text("🟢  " + p, 10, TEXT);
             pr.addView(pt, new LinearLayout.LayoutParams(0, dp(30), 1));
-            Button rm = button("❌", v -> runCustomPath("remove_path", p));
+            Button rm = button("Delete", v -> runCustomPath("remove_path", p));
             rm.setEnabled(!locked && !busy);
-            rm.setTextSize(14);
-            pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30)));
+            rm.setTextSize(10);
+            rm.setTextColor(RED);
+            rm.setBackgroundColor(Color.TRANSPARENT);
+            rm.setPadding(0, 0, 0, 0);
+            rm.setMinWidth(0);
+            rm.setMinimumWidth(0);
+            pr.addView(rm, new LinearLayout.LayoutParams(dp(48), dp(30)));
             box.addView(pr);
         }
     }
