@@ -333,6 +333,35 @@ class SecurityMatrixTests(unittest.TestCase):
         names = {item["name"] for item in result["tools"]}
         self.assertIn("image_read", names)
 
+    def test_guarded_server_tool_list_exposes_image_list(self):
+        module = self._guarded_module()
+        result = module.guarded_tool_list()
+        names = {item["name"] for item in result["tools"]}
+        self.assertIn("image_list", names)
+
+    def test_image_list_is_scoped_and_returns_current_images(self):
+        module = self._guarded_module()
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt"]
+        p["capabilities"]["files"] = [
+            {"id": "files.custom", "state": "allow"},
+            {"id": "files.read", "state": "allow"},
+            {"id": "files.write", "state": "deny"},
+            {"id": "files.list", "state": "allow"},
+        ]
+        policy.save_policy(p)
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "new.png").write_bytes(b"png")
+            (root / "note.txt").write_text("ignore", encoding="utf-8")
+            with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
+                result = module.guarded_call(None, "image_list", {"path": str(root)})
+            self.assertFalse(result.get("isError", False))
+            payload = json.loads(result["content"][0]["text"])
+            self.assertEqual(payload["folder"], str(root.resolve()))
+            self.assertEqual([x["name"] for x in payload["images"]], ["new.png"])
+
     def test_guarded_server_deny_never_executes_original(self):
         module = self._guarded_module()
         deny = types.SimpleNamespace(allowed=False, requires_approval=False)
