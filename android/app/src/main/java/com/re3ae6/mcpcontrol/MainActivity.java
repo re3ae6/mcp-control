@@ -687,7 +687,7 @@ public class MainActivity extends Activity {
         path.setBackground(bg(CARD_SOFT, BORDER, 10));
         row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
 
-        Button browse = button("Choose folder", v -> openStorageFolderPicker());
+        Button browse = button("📂", v -> openStorageFolderPicker());
         browse.setEnabled(!locked && !busy);
         browse.setBackground(bg(CARD_SOFT, BORDER, 17));
         browse.setTextColor(TEXT);
