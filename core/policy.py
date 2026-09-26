@@ -13,6 +13,20 @@ POLICY_FILE = POLICY_DIR / "policy.json"
 VALID = {"deny", "ask", "allow"}
 
 
+def canonical_runtime_path(path: str | os.PathLike[str]) -> Path:
+    """Canonicalize Android shared-storage aliases used by Termux and Android."""
+    raw = os.path.expanduser(str(path).strip())
+    if raw == "~/storage/shared":
+        raw = "/storage/emulated/0"
+    elif raw.startswith("~/storage/shared/"):
+        raw = "/storage/emulated/0" + raw[len("~/storage/shared"):]
+    elif raw == "/sdcard":
+        raw = "/storage/emulated/0"
+    elif raw.startswith("/sdcard/"):
+        raw = "/storage/emulated/0" + raw[len("/sdcard"):]
+    return Path(raw).resolve(strict=False)
+
+
 def canonical_custom_path(path: str) -> Path:
     raw = str(path).strip()
     if not raw.startswith("/"):
