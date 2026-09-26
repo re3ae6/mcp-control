@@ -322,7 +322,7 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         brand.addView(title, new LinearLayout.LayoutParams(0, dp(31), 1));
 
-        TextView signature = text("re3a • v0.2.1", 9, MUTED);
+        TextView signature = text("re3a • v" + BuildConfig.VERSION_NAME + " / #" + BuildConfig.VERSION_CODE, 8, MUTED);
         signature.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         brand.addView(signature, new LinearLayout.LayoutParams(dp(92), dp(31)));
         header.addView(brand);
@@ -500,6 +500,7 @@ public class MainActivity extends Activity {
 
         if ("overview".equals(group)) {
             addConnectionSummary();
+            addBuildDiagnosticsCard();
 
             LinearLayout policyBox = new LinearLayout(this);
             policyBox.setOrientation(LinearLayout.VERTICAL);
@@ -786,7 +787,8 @@ public class MainActivity extends Activity {
             String error = commandError(command);
 
             if (receivedAt >= sentAt && "received".equals(state)) {
-                if (!error.isEmpty()) {
+                int exit = bridge.getInt("exit_" + command, -1);
+                if (!error.isEmpty() || exit != 0) {
                     busy = false;
                     render();
                     addLogBox("Storage path: " + error);
@@ -842,6 +844,39 @@ public class MainActivity extends Activity {
         addIndicator("MCP", isMcpReady(o), connectionFresh);
         addIndicator("Proxy", isProxyReady(o), connectionFresh);
         addIndicator("Tunnel", isTunnelReady(o), connectionFresh);
+    }
+
+    private void addBuildDiagnosticsCard() {
+        boolean termux = false;
+        try {
+            getPackageManager().getPackageInfo("com.termux", 0);
+            termux = true;
+        } catch (PackageManager.NameNotFoundException ignored) {}
+
+        boolean runGranted = checkSelfPermission("com.termux.permission.RUN_COMMAND")
+                == PackageManager.PERMISSION_GRANTED;
+        boolean bridgeReady = termux && runGranted;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(7), dp(10), dp(8));
+        box.setBackground(bg(CARD, BORDER, 13));
+
+        TextView h = text("Build & Bridge", 13, TEXT);
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        box.addView(h, new LinearLayout.LayoutParams(-1, dp(23)));
+
+        String commit = BuildConfig.GIT_COMMIT;
+        if (commit == null || commit.isEmpty()) commit = "unknown";
+
+        box.addView(text("Version  " + BuildConfig.VERSION_NAME + "   •   Build  " + BuildConfig.VERSION_CODE, 10, TEXT));
+        box.addView(text("Commit   " + commit, 10, TEXT));
+        box.addView(text("Android  SDK " + android.os.Build.VERSION.SDK_INT, 10, MUTED));
+        box.addView(text("Termux   " + (termux ? "DETECTED" : "NOT FOUND"), 10, termux ? GREEN : RED));
+        box.addView(text("RUN_COMMAND   " + (runGranted ? "GRANTED" : "DENIED"), 10, runGranted ? GREEN : RED));
+        box.addView(text("Bridge   " + (bridgeReady ? "READY" : "BLOCKED"), 10, bridgeReady ? GREEN : RED));
+
+        content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void addMonitorDiagnosticsCard() {
