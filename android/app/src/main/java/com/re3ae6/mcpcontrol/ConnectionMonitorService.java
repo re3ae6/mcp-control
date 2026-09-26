@@ -23,7 +23,7 @@ public class ConnectionMonitorService extends Service {
     static final String ACTION_STATUS_UPDATE = "com.re3ae6.mcpcontrol.STATUS_UPDATE";
     private static final int NOTIFICATION_ID = 4201;
     private static final long INTERVAL_MS = 10000L;
-    private static final long RESULT_WAIT_MS = 1600L;
+    private static final long RESULT_WAIT_MS = 650L;
 
     private final Handler handler = new Handler();
     private PowerManager.WakeLock wakeLock;
