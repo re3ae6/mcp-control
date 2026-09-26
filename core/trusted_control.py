@@ -47,6 +47,34 @@ def set_capability(capability_id: str, state: str) -> None:
     _audit("set_capability", "ALLOW", f"{capability_id}={state}")
 
 
+def add_custom_path(path: str) -> None:
+    path = str(path).strip()
+    if not path.startswith("/"):
+        raise ValueError("custom_path_must_be_absolute")
+    policy = load_policy()
+    if policy.get("master_lock", True):
+        _audit("add_custom_path", "DENY", f"master_lock:{path}")
+        raise PermissionError("master_lock_active")
+    paths = policy.setdefault("custom_paths", [])
+    if path not in paths:
+        paths.append(path)
+        save_policy(policy)
+    _audit("add_custom_path", "ALLOW", path)
+
+
+def remove_custom_path(path: str) -> None:
+    path = str(path).strip()
+    policy = load_policy()
+    if policy.get("master_lock", True):
+        _audit("remove_custom_path", "DENY", f"master_lock:{path}")
+        raise PermissionError("master_lock_active")
+    paths = policy.setdefault("custom_paths", [])
+    if path in paths:
+        paths.remove(path)
+        save_policy(policy)
+    _audit("remove_custom_path", "ALLOW", path)
+
+
 def lock() -> None:
     policy = load_policy()
     set_master_lock(policy, True)
