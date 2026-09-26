@@ -18,6 +18,9 @@ def _validate_policy(data: dict[str, Any]) -> None:
         raise ValueError("policy_invalid")
     if not isinstance(data.get("master_lock"), bool):
         raise ValueError("master_lock_invalid")
+    custom_paths = data.get("custom_paths", [])
+    if not isinstance(custom_paths, list) or any(not isinstance(x, str) or not x.startswith("/") for x in custom_paths):
+        raise ValueError("custom_paths_invalid")
     capabilities = data.get("capabilities")
     if not isinstance(capabilities, dict):
         raise ValueError("capabilities_invalid")
