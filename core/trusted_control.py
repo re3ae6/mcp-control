@@ -48,43 +48,61 @@ def set_capability(capability_id: str, state: str) -> None:
 
 
 def _sync_custom_storage_capabilities(policy: dict[str, Any]) -> None:
-    """Selected folders get ordinary file operations; broader storage remains denied."""
+    """A selected folder is a path scope; normal file operations are enabled only for that scope."""
     allowed = bool(policy.get("custom_paths"))
     for capability_id in ("files.custom", "files.read", "files.write", "files.list", "files.search"):
         try:
             set_state(policy, capability_id, "allow" if allowed else "deny")
         except KeyError:
-            pass
+            # Keep tests and older policies fail-closed when a capability is absent.
+            continue
+
+
+def _canonical_custom_path(path: str) -> str:
+    raw = str(path).strip()
+    if not raw.startswith("/"):
+        raise ValueError("custom_path_must_be_absolute")
+    try:
+        canonical = Path(raw).expanduser().resolve(strict=False)
+    except OSError as exc:
+        raise ValueError("custom_path_invalid") from exc
+
+    shared_roots = {
+        Path("/storage/emulated/0").resolve(),
+        Path("/sdcard").resolve(),
+    }
+    if canonical in shared_roots:
+        raise ValueError("custom_path_must_be_specific_folder")
+    if not any(root == canonical or root in canonical.parents for root in shared_roots):
+        raise ValueError("custom_path_outside_shared_storage")
+    return str(canonical)
 
 
 def add_custom_path(path: str) -> None:
-    path = str(path).strip()
-    if not path.startswith("/"):
-        raise ValueError("custom_path_must_be_absolute")
+    canonical = _canonical_custom_path(path)
     policy = load_policy()
     if policy.get("master_lock", True):
-        _audit("add_custom_path", "DENY", f"master_lock:{path}")
+        _audit("add_custom_path", "DENY", f"master_lock:{canonical}")
         raise PermissionError("master_lock_active")
     paths = policy.setdefault("custom_paths", [])
-    if path not in paths:
-        paths.append(path)
+    if canonical not in paths:
+        paths.append(canonical)
     _sync_custom_storage_capabilities(policy)
     save_policy(policy)
-    _audit("add_custom_path", "ALLOW", path)
+    _audit("add_custom_path", "ALLOW", canonical)
 
 
 def remove_custom_path(path: str) -> None:
-    path = str(path).strip()
+    canonical = _canonical_custom_path(path)
     policy = load_policy()
     if policy.get("master_lock", True):
-        _audit("remove_custom_path", "DENY", f"master_lock:{path}")
+        _audit("remove_custom_path", "DENY", f"master_lock:{canonical}")
         raise PermissionError("master_lock_active")
     paths = policy.setdefault("custom_paths", [])
-    if path in paths:
-        paths.remove(path)
+    paths[:] = [p for p in paths if _canonical_custom_path(p) != canonical]
     _sync_custom_storage_capabilities(policy)
     save_policy(policy)
-    _audit("remove_custom_path", "ALLOW", path)
+    _audit("remove_custom_path", "ALLOW", canonical)
 
 
 def lock() -> None:
