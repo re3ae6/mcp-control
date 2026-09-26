@@ -159,7 +159,7 @@ if [ -n "$TOKEN" ]; then
   RC=$?
   STDOUT="$(head -c 8000 "$TMP_DIR/stdout")"
   STDERR="$(head -c 8000 "$TMP_DIR/stderr")"
-  send_callback "finished" "$STDOUT" "$STDERR" "$RC" 0 ""
+  send_callback "finished" "$STDOUT" "$STDERR" "$RC" "$RC" "$STDERR"
   cat "$TMP_DIR/stdout"
   cat "$TMP_DIR/stderr" >&2
   exit "$RC"
