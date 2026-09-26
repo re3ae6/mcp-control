@@ -10,5 +10,7 @@ class AndroidUiTabTests(unittest.TestCase):
         self.assertIn('JSONObject caps = policy.optJSONObject("capabilities");', text)
         self.assertIn('return caps == null ? null : caps.optJSONArray(name);', text)
         self.assertIn('JSONArray a = capabilitiesForGroup(group);', text)
-        self.assertIn('addCapabilityRow(x, locked);', text)
+        self.assertIn('addCapabilityRow(box, x, locked);', text)
+        self.assertIn('row.addView(choices, new LinearLayout.LayoutParams(dp(174), dp(38)));', text)
+        self.assertIn('box.setBackground(bg(CARD, BORDER, 12));', text)
         self.assertNotIn('policy.optJSONObject(group)', text)

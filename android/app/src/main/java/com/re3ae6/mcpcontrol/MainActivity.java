@@ -584,10 +584,18 @@ public class MainActivity extends Activity {
             return;
         }
 
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(7), dp(10), dp(8));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(0, dp(3), 0, dp(5));
+        content.addView(box, bp);
+
         for (int i = 0; i < n; i++) {
             JSONObject x = a.optJSONObject(i);
             if (x == null) continue;
-            addCapabilityRow(x, locked);
+            addCapabilityRow(box, x, locked);
         }
     }
 
@@ -617,49 +625,40 @@ public class MainActivity extends Activity {
         return caps == null ? null : caps.optJSONArray(name);
     }
 
-    private void addCapabilityRow(JSONObject x, boolean locked) {
-        String id=x.optString("id");
-        String name=x.optString("label","");
-        String description=x.optString("description","");
-        String state=x.optString("state","deny");
-        if(name.isEmpty()) name=description.isEmpty()?id:description;
+    private void addCapabilityRow(LinearLayout host, JSONObject x, boolean locked) {
+        String id = x.optString("id");
+        String name = x.optString("label", "");
+        String description = x.optString("description", "");
+        String state = x.optString("state", "deny");
+        if (name.isEmpty()) name = description.isEmpty() ? id : description;
 
-        LinearLayout box=new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(10),dp(8),dp(10),dp(8));
-        box.setBackground(bg(CARD,BORDER,12));
-        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
-        bp.setMargins(0,dp(3),0,dp(3));
-        content.addView(box,bp);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(4));
 
-        LinearLayout top=new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView dot=text("●",10,locked?RED:stateColor(state));
-        top.addView(dot,new LinearLayout.LayoutParams(dp(15),dp(21)));
-        TextView title=text(name,12,TEXT);
-        title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        top.addView(title,new LinearLayout.LayoutParams(0,dp(21),1));
-        TextView st=text(locked?"DENY":state.toUpperCase(),8,locked?RED:stateColor(state));
-        st.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
-        st.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        top.addView(st,new LinearLayout.LayoutParams(dp(50),dp(21)));
-        box.addView(top);
+        LinearLayout nameBox = new LinearLayout(this);
+        nameBox.setOrientation(LinearLayout.VERTICAL);
+        TextView title = text(name, 11, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        nameBox.addView(title, new LinearLayout.LayoutParams(-1, dp(20)));
 
-        if(!description.isEmpty()&&!description.equals(name)){
-            TextView d=text(description,9,MUTED);
-            d.setPadding(dp(15),0,0,dp(1));
-            box.addView(d);
-        }
+        String detail = description.isEmpty() || description.equals(name) ? id : description;
+        TextView detailText = text(detail, 8, MUTED);
+        detailText.setSingleLine(false);
+        detailText.setMaxLines(3);
+        nameBox.addView(detailText, new LinearLayout.LayoutParams(-1, -2));
 
-        TextView idText=text(id,8,0xff999b98);
-        idText.setPadding(dp(15),0,0,dp(4));
-        box.addView(idText);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, -2, 1);
+        np.setMargins(0, 0, dp(6), 0);
+        row.addView(nameBox, np);
 
-        LinearLayout choices=new LinearLayout(this);
-        addStateButton(choices,"Deny","deny",id,state,locked);
-        addStateButton(choices,"Ask","ask",id,state,locked);
-        addStateButton(choices,"Allow","allow",id,state,locked);
-        box.addView(choices);
+        LinearLayout choices = new LinearLayout(this);
+        choices.setGravity(Gravity.CENTER_VERTICAL);
+        addStateButton(choices, "Deny", "deny", id, state, locked);
+        addStateButton(choices, "Ask", "ask", id, state, locked);
+        addStateButton(choices, "Allow", "allow", id, state, locked);
+        row.addView(choices, new LinearLayout.LayoutParams(dp(174), dp(38)));
+        host.addView(row);
     }
 
     private int stateColor(String s) {
