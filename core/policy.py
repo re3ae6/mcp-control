@@ -44,9 +44,7 @@ def _validate_policy(data: dict[str, Any]) -> None:
     if not isinstance(custom_paths, list) or any(not isinstance(x, str) or not x.startswith("/") for x in custom_paths):
         raise ValueError("custom_paths_invalid")
     for raw in custom_paths:
-        canonical = canonical_custom_path(raw)
-        if str(canonical) != raw:
-            raise ValueError("custom_paths_not_canonical")
+        canonical_custom_path(raw)
     capabilities = data.get("capabilities")
     if not isinstance(capabilities, dict):
         raise ValueError("capabilities_invalid")
