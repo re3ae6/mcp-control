@@ -1,6 +1,7 @@
 {
   "version": 1,
   "master_lock": true,
+  "custom_paths": [],
   "capabilities": {
     "files": [
       {
