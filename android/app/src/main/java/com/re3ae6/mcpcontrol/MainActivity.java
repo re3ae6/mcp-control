@@ -687,7 +687,7 @@ public class MainActivity extends Activity {
         path.setBackground(bg(CARD_SOFT, BORDER, 10));
         row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
 
-        Button browse = button("📂", v -> openStorageFolderPicker());
+        Button browse = button("Choose folder", v -> openStorageFolderPicker());
         browse.setEnabled(!locked && !busy);
         browse.setBackground(bg(CARD_SOFT, BORDER, 17));
         browse.setTextColor(TEXT);
@@ -1198,3 +1198,275 @@ public class MainActivity extends Activity {
         status.setText("●  Disconnected");
         status.setTextColor(RED);
         render();
+        String detail = getSharedPreferences("bridge", MODE_PRIVATE).getString("last_error", "");
+        String log = detail == null || detail.isEmpty() ? message : detail;
+        addLogBox(log);
+    }
+
+    private void addLogBox(String message) {
+        String finalMessage = message == null || message.isEmpty() ? "No details." : message;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("MCP Control diagnostic", finalMessage));
+        }
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(10), dp(14), dp(10));
+        box.setBackground(bg(CARD_SOFT, BORDER, 16));
+
+        TextView heading = text("Log", 12, TEXT);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        box.addView(heading, new LinearLayout.LayoutParams(-1, dp(22)));
+
+        ScrollView logScroll = new ScrollView(this);
+        logScroll.setFillViewport(false);
+        TextView log = text(finalMessage, 11, TEXT);
+        log.setTextIsSelectable(true);
+        log.setGravity(Gravity.TOP | Gravity.START);
+        log.setPadding(0, dp(4), 0, dp(2));
+        logScroll.addView(log);
+        box.addView(logScroll, new LinearLayout.LayoutParams(-1, dp(86)));
+
+        if (finalMessage.contains("com.termux.permission.RUN_COMMAND") || finalMessage.contains("Run commands in Termux")) {
+            Button settings = button("Open MCP Control permissions", v -> openTermuxPermissionSettings());
+            settings.setBackground(bg(CARD, BORDER, 20));
+            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(38));
+            sp.setMargins(0, dp(7), 0, 0);
+            box.addView(settings, sp);
+        }
+
+        if (logHost != null) {
+            logHost.removeAllViews();
+            logHost.addView(box, new LinearLayout.LayoutParams(-1, -2));
+        } else {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.setMargins(0, dp(6), 0, dp(6));
+            content.addView(box, 0, lp);
+        }
+    }
+
+    private void syncPolicyAndStatus() {
+        // Use the same callback-token-aware policy waiter as initial load. The old
+        // fixed 650 ms read could race a slow Termux callback, leaving the UI stale
+        // until the user pressed Connect / Refresh.
+        clearOutput();
+        clearCommandResult("policy");
+        if (!McpBridge.run(this, "policy")) {
+            operationFailure("Policy query could not be started.");
+            return;
+        }
+
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_policy", System.currentTimeMillis());
+
+        waitForPolicyResult(sentAt, System.currentTimeMillis() + 8000L, () -> {
+            clearOutput();
+            clearCommandResult("status");
+            if (!McpBridge.run(this, "status")) {
+                bridgeFailure("Status query could not be started.");
+                return;
+            }
+            handler.postDelayed(() -> {
+                String statusError = commandError("status");
+                if (!statusError.isEmpty()) {
+                    bridgeFailure(statusError);
+                    return;
+                }
+                applyStatusResult();
+                busy = false;
+                render();
+            }, 700L);
+        });
+    }
+
+    private void loadApprovals() {
+        if (busy) return;
+        busy = true;
+        status.setText("●  Checking approvals…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("approvals");
+        if (!McpBridge.run(this, "approvals")) {
+            operationFailure("Could not query pending approvals.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("approvals");
+            if (!error.isEmpty()) {
+                operationFailure(error);
+                return;
+            }
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_approvals", "");
+            try {
+                JSONObject o = new JSONObject(out);
+                JSONArray a = o.optJSONArray("approvals");
+                pendingApprovals = a == null ? new JSONArray() : a;
+            } catch (Exception ignored) {
+                pendingApprovals = new JSONArray();
+            }
+            busy = false;
+            render();
+            if ("overview".equals(group)) addPendingApprovalsCard();
+        }, 650L);
+    }
+
+    private void addPendingApprovalsCard() {
+        int count = pendingApprovals.length();
+        addCard("Approval Queue", count == 0 ? "No pending requests" : count + " request" + (count == 1 ? "" : "s") + " awaiting approval");
+        if (count == 0) {
+            content.addView(text("Nothing needs approval right now.", 13, MUTED));
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            JSONObject item = pendingApprovals.optJSONObject(i);
+            if (item == null) continue;
+            String id = item.optString("approval_id", "");
+            String capability = item.optString("capability", "unknown");
+            String tool = item.optString("tool", "unknown");
+            String expires = item.optString("expires_at", "");
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(14), dp(12), dp(14), dp(12));
+            row.setBackground(bg(CARD, BORDER, 16));
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2);
+            rp.setMargins(0, dp(5), 0, dp(5));
+            content.addView(row, rp);
+            TextView title = text(capability + "  •  " + tool, 14, TEXT);
+            title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            row.addView(title);
+            row.addView(text("Expires: " + expires, 10, MUTED));
+            Button approve = button("Approve", v -> runApproval(id));
+            approve.setBackground(bg(CARD_SOFT, BORDER, 22));
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(40));
+            bp.setMargins(0, dp(8), 0, 0);
+            row.addView(approve, bp);
+        }
+    }
+
+    private void loadAudit() {
+        if (busy) return;
+        busy = true;
+        status.setText("●  Loading log…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("audit");
+        if (!McpBridge.run(this, "audit")) {
+            operationFailure("Could not query the audit log.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("audit");
+            String out = getSharedPreferences("bridge", MODE_PRIVATE).getString("stdout_audit", "");
+            busy = false;
+            render();
+            if (!error.isEmpty()) {
+                addLogBox(error);
+                return;
+            }
+            try {
+                JSONObject o = new JSONObject(out);
+                JSONArray lines = o.optJSONArray("lines");
+                if (lines == null || lines.length() == 0) {
+                    addLogBox("No audit entries found.");
+                    return;
+                }
+                StringBuilder b = new StringBuilder("Recent audit entries:\n");
+                for (int i = 0; i < lines.length(); i++) {
+                    b.append(lines.optString(i)).append('\n');
+                }
+                addLogBox(b.toString().trim());
+            } catch (Exception e) {
+                addLogBox(out.isEmpty() ? "No audit entries found." : out);
+            }
+        }, 650L);
+    }
+
+    private void runApproval(String id) {
+        if (busy || id.isEmpty()) return;
+        busy = true;
+        status.setText("●  Approving…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("approve");
+        if (!McpBridge.run(this, "approve", id)) {
+            operationFailure("Could not approve the request.");
+            return;
+        }
+        handler.postDelayed(() -> {
+            String error = commandError("approve");
+            if (!error.isEmpty()) {
+                operationFailure(error);
+                return;
+            }
+            busy = false;
+            loadApprovals();
+        }, 650L);
+    }
+
+    private void runSet(String id,String n) {
+        if(busy)return;
+        busy=true;
+        status.setText("●  Saving…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("set");
+        if (!McpBridge.run(this,"set",id,n)) {
+            bridgeFailure("Could not start the policy change in Termux.");
+            return;
+        }
+        handler.postDelayed(()->{syncPolicyAndStatus();},1100);
+    }
+
+    private void runAction(String a,int d) {
+        if(busy)return;
+        busy=true;
+        status.setText("●  "+a.substring(0,1).toUpperCase()+a.substring(1)+"…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult(a);
+        if (!McpBridge.run(this,a)) {
+            bridgeFailure("Could not start the " + a + " action in Termux.");
+            return;
+        }
+        handler.postDelayed(()->{syncPolicyAndStatus();},d);
+    }
+
+    private void lockAll() {
+        if(busy)return;
+        busy=true;
+        status.setText("●  Locking…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("lock");
+        if (!McpBridge.run(this,"lock")) {
+            bridgeFailure("Could not lock the control plane in Termux.");
+            return;
+        }
+        handler.postDelayed(()->{syncPolicyAndStatus();},900);
+    }
+
+    private void unlockAll() {
+        if(busy)return;
+        busy=true;
+        status.setText("●  Unlocking…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult("unlock");
+        if (!McpBridge.run(this,"unlock","UNLOCK")) {
+            bridgeFailure("Could not unlock the control plane in Termux.");
+            return;
+        }
+        handler.postDelayed(()->{
+            getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                    .putBoolean("emergency_locked", false)
+                    .putBoolean("emergency_killed", false)
+                    .apply();
+            startConnectionMonitor();
+            syncPolicyAndStatus();
+        },900);
+    }
+}
+
+// Command callbacks are emitted by the executable mobile_control.sh dispatcher.
+// CI trigger: connection diagnostic branch is syntactically closed.
