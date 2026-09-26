@@ -769,23 +769,58 @@ public class MainActivity extends Activity {
             }
             final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
                     .getLong("sent_at_" + command, System.currentTimeMillis());
-            handler.postDelayed(() -> {
-                String error = commandError(command);
-                long receivedAt = getSharedPreferences("bridge", MODE_PRIVATE)
-                        .getLong("received_at_" + command, 0L);
-                if (!error.isEmpty() && receivedAt >= sentAt) {
+            waitForCustomPathResult(command, sentAt, System.currentTimeMillis() + 8000L);
+        } catch (RuntimeException e) {
+            busy = false;
+            render();
+            addLogBox("Storage path: " + e.getMessage());
+        }
+    }
+
+    private void waitForCustomPathResult(String command, long sentAt, long deadline) {
+        handler.postDelayed(() -> {
+            android.content.SharedPreferences bridge =
+                    getSharedPreferences("bridge", MODE_PRIVATE);
+            long receivedAt = bridge.getLong("received_at_" + command, 0L);
+            String state = bridge.getString("callback_state_" + command, "unknown");
+            String error = commandError(command);
+
+            if (receivedAt >= sentAt && "received".equals(state)) {
+                if (!error.isEmpty()) {
                     busy = false;
                     render();
                     addLogBox("Storage path: " + error);
                     return;
                 }
                 loadPolicyAndFinish();
-            }, 700L);
-        } catch (RuntimeException e) {
+                return;
+            }
+
+            if (!error.isEmpty() && receivedAt >= sentAt) {
+                busy = false;
+                render();
+                addLogBox("Storage path: " + error);
+                return;
+            }
+
+            if (System.currentTimeMillis() < deadline) {
+                waitForCustomPathResult(command, sentAt, deadline);
+                return;
+            }
+
             busy = false;
             render();
-            addLogBox("Storage path: " + e.getMessage());
-        }
+            String stage = bridge.getString("callback_stage_" + command, "");
+            String detail = bridge.getString("stderr_" + command, "");
+            StringBuilder b = new StringBuilder("Storage path callback timeout.")
+                    .append("\ncommand: ").append(command)
+                    .append("\ncallback: ").append(state)
+                    .append(" | stage: ").append(stage.isEmpty() ? "none" : stage)
+                    .append("\nsent_at: ").append(sentAt)
+                    .append(" | received_at: ").append(receivedAt);
+            if (detail != null && !detail.isEmpty()) b.append("\nSTDERR: ").append(detail);
+            addLogBox(b.toString());
+        }, 150L);
     }
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
 
