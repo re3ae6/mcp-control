@@ -16,6 +16,7 @@ from core.capability_map import (
     CONTROL_ONLY_CAPABILITIES,
     capability_for_tool,
     git_capability_for_command,
+    file_capabilities_for_path,
 )
 
 
@@ -63,6 +64,40 @@ class SecurityMatrixTests(unittest.TestCase):
         for p in reversed(self.patches):
             p.stop()
         self.tmp.cleanup()
+
+    def test_custom_folder_requires_operation_and_scope(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt"]
+        p["capabilities"]["files"] = [
+            {"id": "files.custom", "state": "allow"},
+            {"id": "files.read", "state": "deny"},
+            {"id": "files.write", "state": "allow"},
+        ]
+        policy.save_policy(p)
+
+        self.assertEqual(
+            file_capabilities_for_path("read", "/storage/emulated/0/Download/Chatgpt/data.jsonl"),
+            ["files.read", "files.custom"],
+        )
+        self.assertEqual(
+            file_capabilities_for_path("write", "/storage/emulated/0/Download/Chatgpt/out.jsonl"),
+            ["files.write", "files.custom"],
+        )
+
+    def test_custom_path_does_not_enable_shared_storage(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt"]
+        p["capabilities"]["files"] = [
+            {"id": "files.custom", "state": "deny"},
+            {"id": "files.shared_storage", "state": "deny"},
+        ]
+        policy.save_policy(p)
+
+        trusted_control._sync_custom_storage_capabilities(p)
+        self.assertEqual(policy.decision(p, "files.custom"), "allow")
+        self.assertEqual(policy.decision(p, "files.shared_storage"), "deny")
 
     def test_master_lock_is_global_effective_deny(self):
         p = policy.load_policy()
