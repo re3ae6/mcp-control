@@ -104,6 +104,7 @@ class SecurityMatrixTests(unittest.TestCase):
         policy.save_policy(p)
 
         trusted_control._sync_custom_storage_capabilities(p)
+        policy.save_policy(p)
 
         self.assertEqual(
             file_capabilities_for_path("read", "/storage/emulated/0/Download/Chatgpt/data.jsonl"),
@@ -121,6 +122,7 @@ class SecurityMatrixTests(unittest.TestCase):
     def test_selected_folder_auto_grants_basic_file_operations_only(self):
         p = policy.load_policy()
         p["master_lock"] = False
+        policy.save_policy(p)
         trusted_control.add_custom_path("/storage/emulated/0/Download/Chatgpt/")
         p = policy.load_policy()
 
@@ -150,13 +152,10 @@ class SecurityMatrixTests(unittest.TestCase):
         p = policy.load_policy()
         p["master_lock"] = False
         p["custom_paths"] = ["/storage/emulated/0/Download/Chatgpt"]
-        p["capabilities"]["files"] = [
-            {"id": "files.custom", "state": "deny"},
-            {"id": "files.shared_storage", "state": "deny"},
-        ]
         policy.save_policy(p)
 
         trusted_control._sync_custom_storage_capabilities(p)
+        policy.save_policy(p)
         self.assertEqual(policy.decision(p, "files.custom"), "allow")
         self.assertEqual(policy.decision(p, "files.read"), "allow")
         self.assertEqual(policy.decision(p, "files.write"), "allow")
