@@ -29,9 +29,8 @@ def file_capabilities_for_path(name,path):
     cap=FILE_TOOLS.get(name)
     if not cap: return []
     scope=file_scope(path)
-    # A user-selected custom root is the explicit file-access boundary.
-    # files.custom grants ordinary file operations inside that root.
-    if scope == "files.custom": return ["files.custom"]
+    # File access is always two-dimensional:
+    # the operation (read/write/list/...) and the path scope must both allow it.
     return [cap,scope]
 
 
