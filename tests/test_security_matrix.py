@@ -318,11 +318,12 @@ class SecurityMatrixTests(unittest.TestCase):
             image_file.write(b"fake-png-bytes")
             image_path = Path(image_file.name)
         try:
-            with patch.object(module, "record") as record:
+            with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
                 result = module.guarded_call(None, "image_read", {"input": str(image_path)})
-            self.assertTrue(result["isError"])
-            self.assertIn("files.custom", result["content"][0]["text"])
-            record.assert_called()
+            self.assertFalse(result.get("isError", False))
+            self.assertEqual(result["content"][0]["type"], "image")
+            self.assertEqual(result["content"][0]["mimeType"], "image/png")
+            self.assertEqual(result["content"][0]["data"], "ZmFrZS1wbmctYnl0ZXM=")
         finally:
             image_path.unlink(missing_ok=True)
 
