@@ -327,6 +327,12 @@ class SecurityMatrixTests(unittest.TestCase):
         finally:
             image_path.unlink(missing_ok=True)
 
+    def test_guarded_server_tool_list_exposes_image_read(self):
+        module = self._guarded_module()
+        result = module.guarded_tool_list()
+        names = {item["name"] for item in result["tools"]}
+        self.assertIn("image_read", names)
+
     def test_guarded_server_deny_never_executes_original(self):
         module = self._guarded_module()
         deny = types.SimpleNamespace(allowed=False, requires_approval=False)
