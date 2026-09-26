@@ -97,6 +97,10 @@ class SecurityMatrixTests(unittest.TestCase):
 
         trusted_control._sync_custom_storage_capabilities(p)
         self.assertEqual(policy.decision(p, "files.custom"), "allow")
+        self.assertEqual(policy.decision(p, "files.read"), "allow")
+        self.assertEqual(policy.decision(p, "files.write"), "allow")
+        self.assertEqual(policy.decision(p, "files.list"), "allow")
+        self.assertEqual(policy.decision(p, "files.search"), "allow")
         self.assertEqual(policy.decision(p, "files.shared_storage"), "deny")
 
     def test_master_lock_is_global_effective_deny(self):
