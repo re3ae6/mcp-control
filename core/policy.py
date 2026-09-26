@@ -13,6 +13,28 @@ POLICY_FILE = POLICY_DIR / "policy.json"
 VALID = {"deny", "ask", "allow"}
 
 
+def canonical_custom_path(path: str) -> Path:
+    raw = str(path).strip()
+    if not raw.startswith("/"):
+        raise ValueError("custom_path_must_be_absolute")
+    # Android exposes primary shared storage through both aliases.
+    if raw == "/sdcard":
+        raw = "/storage/emulated/0"
+    elif raw.startswith("/sdcard/"):
+        raw = "/storage/emulated/0" + raw[len("/sdcard"):]
+    try:
+        canonical = Path(raw).expanduser().resolve(strict=False)
+    except OSError as exc:
+        raise ValueError("custom_path_invalid") from exc
+
+    shared_root = Path("/storage/emulated/0").resolve()
+    if canonical == shared_root:
+        raise ValueError("custom_path_must_be_specific_folder")
+    if shared_root not in canonical.parents:
+        raise ValueError("custom_path_outside_shared_storage")
+    return canonical
+
+
 def _validate_policy(data: dict[str, Any]) -> None:
     if not isinstance(data, dict) or data.get("version") != 1:
         raise ValueError("policy_invalid")
@@ -21,16 +43,10 @@ def _validate_policy(data: dict[str, Any]) -> None:
     custom_paths = data.get("custom_paths", [])
     if not isinstance(custom_paths, list) or any(not isinstance(x, str) or not x.startswith("/") for x in custom_paths):
         raise ValueError("custom_paths_invalid")
-    shared_roots = (Path("/storage/emulated/0").resolve(), Path("/sdcard").resolve())
     for raw in custom_paths:
-        try:
-            root = Path(raw).expanduser().resolve(strict=False)
-        except OSError as exc:
-            raise ValueError("custom_paths_invalid") from exc
-        if root in shared_roots:
-            raise ValueError("custom_path_must_be_specific_folder")
-        if not any(shared == root or shared in root.parents for shared in shared_roots):
-            raise ValueError("custom_path_outside_shared_storage")
+        canonical = canonical_custom_path(raw)
+        if str(canonical) != raw:
+            raise ValueError("custom_paths_not_canonical")
     capabilities = data.get("capabilities")
     if not isinstance(capabilities, dict):
         raise ValueError("capabilities_invalid")
