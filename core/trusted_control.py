@@ -48,13 +48,12 @@ def set_capability(capability_id: str, state: str) -> None:
 
 
 def _sync_custom_storage_capabilities(policy: dict[str, Any]) -> None:
-    """Grant storage capability only while at least one explicit custom path exists."""
+    """Enable selected-folder scope, never the broader shared-storage scope."""
     allowed = bool(policy.get("custom_paths"))
-    for capability_id in ("files.custom", "files.shared_storage"):
-        try:
-            set_state(policy, capability_id, "allow" if allowed else "deny")
-        except KeyError:
-            pass
+    try:
+        set_state(policy, "files.custom", "allow" if allowed else "deny")
+    except KeyError:
+        pass
 
 
 def add_custom_path(path: str) -> None:
