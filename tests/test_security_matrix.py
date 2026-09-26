@@ -328,7 +328,7 @@ class SecurityMatrixTests(unittest.TestCase):
             sys.modules.pop("runtime.guarded_server", None)
             return importlib.import_module("runtime.guarded_server")
 
-    def test_image_read_is_scoped_file_read_and_returns_image_content(self):
+    def test_read_image_uses_existing_read_tool_and_returns_native_resource(self):
         module = self._guarded_module()
         p = policy.load_policy()
         p["master_lock"] = False
@@ -339,24 +339,46 @@ class SecurityMatrixTests(unittest.TestCase):
             {"id": "files.write", "state": "deny"},
         ]
         policy.save_policy(p)
+        with tempfile.TemporaryDirectory() as d:
+            image_path = Path(d) / "nested" / "photo.jpg"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"\\x89PNG\\r\\n\\x1a\\nimage")
+            before = sorted(str(x.relative_to(Path(d))) for x in Path(d).rglob("*"))
+            with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
+                result = module.guarded_call(None, "read", {"path": str(image_path)})
+            after = sorted(str(x.relative_to(Path(d))) for x in Path(d).rglob("*"))
+            self.assertFalse(result.get("isError", False))
+            self.assertEqual(result["content"][0]["type"], "resource")
+            self.assertEqual(result["content"][0]["resource"]["mimeType"], "image/png")
+            self.assertEqual(result["content"][0]["resource"]["uri"], "mcp-control://image/photo.jpg")
+            self.assertEqual(result["content"][0]["resource"]["blob"], __import__("base64").b64encode(image_path.read_bytes()).decode("ascii"))
+            self.assertEqual(before, after)
+
+    def test_read_image_denies_immediately_when_scope_is_revoked(self):
+        module = self._guarded_module()
+        p = policy.load_policy()
+        p["master_lock"] = False
+        p["capabilities"]["files"] = [
+            {"id": "files.read", "state": "allow"},
+            {"id": "files.custom", "state": "deny"},
+        ]
+        policy.save_policy(p)
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as image_file:
-            image_file.write(b"fake-png-bytes")
+            image_file.write(b"\\x89PNG\\r\\n\\x1a\\nimage")
             image_path = Path(image_file.name)
         try:
             with patch.object(module, "file_scope", return_value="files.custom"), patch.object(module, "record"):
-                result = module.guarded_call(None, "image_read", {"input": str(image_path)})
-            self.assertFalse(result.get("isError", False))
-            self.assertEqual(result["content"][0]["type"], "image")
-            self.assertEqual(result["content"][0]["mimeType"], "image/png")
-            self.assertEqual(result["content"][0]["data"], "ZmFrZS1wbmctYnl0ZXM=")
+                result = module.guarded_call(None, "read", {"path": str(image_path)})
+            self.assertTrue(result.get("isError", False))
+            self.assertIn("files.custom", result["content"][0]["text"])
         finally:
             image_path.unlink(missing_ok=True)
 
-    def test_guarded_server_tool_list_exposes_image_read(self):
+    def test_guarded_server_tool_list_does_not_add_image_read(self):
         module = self._guarded_module()
         result = module.guarded_tool_list()
         names = {item["name"] for item in result["tools"]}
-        self.assertIn("image_read", names)
+        self.assertNotIn("image_read", names)
 
     def test_guarded_server_tool_list_exposes_image_list(self):
         module = self._guarded_module()
