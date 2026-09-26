@@ -61,6 +61,42 @@ add_custom_path(sys.argv[1])
 print(json.dumps({"ok":True,"path":sys.argv[1]}))
 PY
       ;;
+    image_info)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import json, sys
+from pathlib import Path
+from core.policy import load_policy
+p = Path(sys.argv[1]).expanduser().resolve(strict=False)
+policy = load_policy()
+if policy.get("master_lock", True): raise PermissionError("master_lock_active")
+roots = [Path(x).expanduser().resolve(strict=False) for x in policy.get("custom_paths", [])]
+if not any(r == p or r in p.parents for r in roots): raise PermissionError("path_outside_selected_folder")
+if not p.is_file(): raise FileNotFoundError("image_not_found")
+import subprocess
+r = subprocess.run(["magick", "identify", "-format", "%m|%wx%h|%z-bit|%[colorspace]|%b", str(p)], capture_output=True, text=True)
+if r.returncode: raise RuntimeError(r.stderr.strip() or "image_identify_failed")
+print(json.dumps({"ok": True, "path": str(p), "info": r.stdout.strip()}, ensure_ascii=False))
+PY
+      ;;
+    image_ocr)
+      [ -n "${2:-}" ] || return 2
+      PYTHONPATH="$REPO" python3 - "$2" <<'PY'
+import json, sys
+from pathlib import Path
+from core.policy import load_policy
+p = Path(sys.argv[1]).expanduser().resolve(strict=False)
+policy = load_policy()
+if policy.get("master_lock", True): raise PermissionError("master_lock_active")
+roots = [Path(x).expanduser().resolve(strict=False) for x in policy.get("custom_paths", [])]
+if not any(r == p or r in p.parents for r in roots): raise PermissionError("path_outside_selected_folder")
+if not p.is_file(): raise FileNotFoundError("image_not_found")
+import subprocess
+r = subprocess.run(["tesseract", str(p), "stdout"], capture_output=True, text=True)
+if r.returncode: raise RuntimeError(r.stderr.strip() or "ocr_failed")
+print(json.dumps({"ok": True, "path": str(p), "text": r.stdout.strip()}, ensure_ascii=False))
+PY
+      ;;
     remove_path)
       [ -n "${2:-}" ] || return 2
       PYTHONPATH="$REPO" python3 - "$2" <<'PY'
