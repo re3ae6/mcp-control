@@ -37,6 +37,10 @@ class SecurityMatrixTests(unittest.TestCase):
                     {"id": "terminal.bash", "state": "deny"},
                     {"id": "terminal.python", "state": "ask"},
                     {"id": "terminal.process", "state": "allow"},
+                    {"id": "terminal.run", "state": "deny"},
+                ],
+                "mcp": [
+                    {"id": "mcp.execute", "state": "deny"},
                 ]
             },
         }
