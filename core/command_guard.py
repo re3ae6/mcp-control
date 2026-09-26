@@ -12,9 +12,24 @@ SHELL_WRAPPERS = {"sh", "bash", "zsh", "fish"}
 INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"}
 CODE_FLAGS = {"-c", "-e", "--eval", "--command"}
 
+def _custom_inside(path: Path) -> bool:
+    rp = path.resolve()
+    try:
+        from .policy import load_policy, decision
+        policy = load_policy()
+        if decision(policy, "files.custom") != "allow":
+            return False
+        for custom in policy.get("custom_paths", []):
+            root = Path(custom).expanduser().resolve()
+            if rp == root or root in rp.parents:
+                return True
+    except Exception:
+        pass
+    return False
+
 def _inside(path: Path) -> bool:
     rp = path.resolve()
-    return any(rp == root or root in rp.parents for root in ALLOWED_ROOTS)
+    return _custom_inside(rp) or any(rp == root or root in rp.parents for root in ALLOWED_ROOTS)
 
 def _looks_like_path(token: str) -> bool:
     return token.startswith(("/", "~/", "../", "./")) or "/" in token
