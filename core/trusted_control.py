@@ -47,6 +47,16 @@ def set_capability(capability_id: str, state: str) -> None:
     _audit("set_capability", "ALLOW", f"{capability_id}={state}")
 
 
+def _sync_custom_storage_capabilities(policy: dict[str, Any]) -> None:
+    """Grant storage capability only while at least one explicit custom path exists."""
+    allowed = bool(policy.get("custom_paths"))
+    for capability_id in ("files.custom", "files.shared_storage"):
+        try:
+            set_state(policy, capability_id, "allow" if allowed else "deny")
+        except KeyError:
+            pass
+
+
 def add_custom_path(path: str) -> None:
     path = str(path).strip()
     if not path.startswith("/"):
@@ -58,7 +68,8 @@ def add_custom_path(path: str) -> None:
     paths = policy.setdefault("custom_paths", [])
     if path not in paths:
         paths.append(path)
-        save_policy(policy)
+    _sync_custom_storage_capabilities(policy)
+    save_policy(policy)
     _audit("add_custom_path", "ALLOW", path)
 
 
@@ -71,7 +82,8 @@ def remove_custom_path(path: str) -> None:
     paths = policy.setdefault("custom_paths", [])
     if path in paths:
         paths.remove(path)
-        save_policy(policy)
+    _sync_custom_storage_capabilities(policy)
+    save_policy(policy)
     _audit("remove_custom_path", "ALLOW", path)
 
 
