@@ -36,6 +36,9 @@ public class MainActivity extends Activity {
     private boolean connectionOk = false;
     private static final int STORAGE_FOLDER_REQUEST = 5101;
     private android.widget.EditText storagePathField;
+    private TextView storageResult;
+    private String storageResultMessage = "";
+    private int storageResultColor = MUTED;
     private boolean connectionFresh = false;
     private JSONObject lastConnectionStatus;
     private long connectionSnapshotAt = 0L;
@@ -494,13 +497,13 @@ public class MainActivity extends Activity {
     private void render() {
         showConnectionHeader();
         content.removeAllViews();
+        logHost = null;
         highlightTab();
 
         boolean locked = policy != null && policy.optBoolean("master_lock", true);
 
         if ("overview".equals(group)) {
             addConnectionSummary();
-            addBuildDiagnosticsCard();
 
             LinearLayout policyBox = new LinearLayout(this);
             policyBox.setOrientation(LinearLayout.VERTICAL);
@@ -557,8 +560,8 @@ public class MainActivity extends Activity {
             controlBox.addView(audit, cp);
             content.addView(controlBox, cb);
 
-            addMonitorDiagnosticsCard();
             if (pendingApprovals.length() > 0) addPendingApprovalsCard();
+            addMonitorDiagnosticsCard();
             return;
         }
 
@@ -676,14 +679,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
         bp.setMargins(0, dp(3), 0, dp(5));
         content.addView(box, bp);
+
         TextView hint = text("Add a specific phone folder. Access stays denied unless explicitly allowed.", 9, MUTED);
         box.addView(hint);
+
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         final android.widget.EditText path = new android.widget.EditText(this);
         storagePathField = path;
-        path.setSingleLine(true); path.setTextSize(12);
-        path.setHint("/storage/emulated/0/Downloads");
+        path.setSingleLine(true);
+        path.setTextSize(12);
+        path.setHint("/storage/emulated/0/Chatgpt");
         path.setPadding(dp(10), 0, dp(10), 0);
         path.setBackground(bg(CARD_SOFT, BORDER, 10));
         row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
@@ -696,20 +702,45 @@ public class MainActivity extends Activity {
         br.setMargins(dp(6), 0, 0, 0);
         row.addView(browse, br);
 
-        Button add = button("Add", v -> { String p = path.getText().toString().trim(); if (!p.isEmpty()) runCustomPath("add_path", p); });
+        Button add = button("Add", v -> {
+            String p = path.getText().toString().trim();
+            if (p.isEmpty()) {
+                setStorageResult("Choose a folder or enter its absolute phone path.", RED);
+                return;
+            }
+            if (!(p.startsWith("/storage/emulated/0/") || p.equals("/storage/emulated/0")
+                    || p.startsWith("/sdcard/") || p.equals("/sdcard"))) {
+                setStorageResult("Storage path must be under /storage/emulated/0 or /sdcard.", RED);
+                return;
+            }
+            runCustomPath("add_path", p);
+        });
         add.setEnabled(!locked && !busy);
-        add.setBackground(bg(TEXT, TEXT, 17)); add.setTextColor(Color.WHITE);
+        add.setBackground(bg(TEXT, TEXT, 17));
+        add.setTextColor(Color.WHITE);
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(64), dp(42));
         ap.setMargins(dp(6), 0, 0, 0);
         row.addView(add, ap);
         box.addView(row);
+
+        storageResult = text(storageResultMessage, 10, storageResultColor);
+        storageResult.setPadding(dp(2), dp(6), dp(2), dp(2));
+        storageResult.setVisibility(storageResultMessage.isEmpty() ? View.GONE : View.VISIBLE);
+        box.addView(storageResult);
+
         JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
         if (paths != null) for (int i=0; i<paths.length(); i++) {
-            final String p = paths.optString(i, ""); if (p.isEmpty()) continue;
-            LinearLayout pr = new LinearLayout(this); pr.setGravity(Gravity.CENTER_VERTICAL);
-            TextView pt = text("🟢  " + p, 10, TEXT); pr.addView(pt, new LinearLayout.LayoutParams(0, dp(30), 1));
-            Button rm = button("❌", v -> runCustomPath("remove_path", p)); rm.setEnabled(!locked && !busy); rm.setTextSize(14);
-            pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30))); box.addView(pr);
+            final String p = paths.optString(i, "");
+            if (p.isEmpty()) continue;
+            LinearLayout pr = new LinearLayout(this);
+            pr.setGravity(Gravity.CENTER_VERTICAL);
+            TextView pt = text("🟢  " + p, 10, TEXT);
+            pr.addView(pt, new LinearLayout.LayoutParams(0, dp(30), 1));
+            Button rm = button("❌", v -> runCustomPath("remove_path", p));
+            rm.setEnabled(!locked && !busy);
+            rm.setTextSize(14);
+            pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30)));
+            box.addView(pr);
         }
     }
 
@@ -754,9 +785,31 @@ public class MainActivity extends Activity {
         return null;
     }
 
+    private void setStorageResult(String message, int color) {
+        storageResultMessage = message == null ? "" : message;
+        storageResultColor = color;
+        if (storageResult != null) {
+            storageResult.setText(storageResultMessage);
+            storageResult.setTextColor(storageResultColor);
+            storageResult.setVisibility(storageResultMessage.isEmpty() ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private String storageFailureDetail(String command, int exit) {
+        android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+        String error = commandError(command);
+        if (!error.isEmpty()) return error;
+        String stderr = bridge.getString("stderr_" + command, "");
+        if (stderr != null && !stderr.isEmpty()) return stderr.trim();
+        String stdout = bridge.getString("stdout_" + command, "");
+        if (stdout != null && !stdout.isEmpty()) return stdout.trim();
+        return "Termux command failed (exit=" + exit + ").";
+    }
+
     private void runCustomPath(String command, String path) {
         if (busy) return;
         busy = true;
+        setStorageResult(("add_path".equals(command) ? "Adding " : "Removing ") + path + "…", YELLOW);
         status.setText("●  Saving…");
         status.setTextColor(YELLOW);
         clearOutput();
@@ -764,66 +817,71 @@ public class MainActivity extends Activity {
         try {
             if (!McpBridge.run(this, command, path)) {
                 busy = false;
-                addLogBox("Storage path: could not start " + command + ".");
+                setStorageResult("Could not start " + command + ". Check Termux bridge status.", RED);
                 render();
                 return;
             }
             final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
                     .getLong("sent_at_" + command, System.currentTimeMillis());
-            waitForCustomPathResult(command, sentAt, System.currentTimeMillis() + 8000L);
+            waitForCustomPathResult(command, path, sentAt, System.currentTimeMillis() + 8000L);
         } catch (RuntimeException e) {
             busy = false;
+            setStorageResult("Storage path: " + e.getMessage(), RED);
             render();
-            addLogBox("Storage path: " + e.getMessage());
         }
     }
 
-    private void waitForCustomPathResult(String command, long sentAt, long deadline) {
+    private void waitForCustomPathResult(String command, String path, long sentAt, long deadline) {
         handler.postDelayed(() -> {
             android.content.SharedPreferences bridge =
                     getSharedPreferences("bridge", MODE_PRIVATE);
             long receivedAt = bridge.getLong("received_at_" + command, 0L);
             String state = bridge.getString("callback_state_" + command, "unknown");
-            String error = commandError(command);
 
             if (receivedAt >= sentAt && "received".equals(state)) {
                 int exit = bridge.getInt("exit_" + command, -1);
-                if (!error.isEmpty() || exit != 0) {
+                if (exit != 0 || !commandError(command).isEmpty()) {
                     busy = false;
+                    setStorageResult(storageFailureDetail(command, exit), RED);
                     render();
-                    addLogBox("Storage path: " + error);
                     return;
                 }
-                loadPolicyAndFinish();
+                loadPolicyAndFinish(() -> {
+                    busy = false;
+                    setStorageResult(("add_path".equals(command) ? "Added: " : "Removed: ") + path, GREEN);
+                    render();
+                });
                 return;
             }
 
+            String error = commandError(command);
             if (!error.isEmpty() && receivedAt >= sentAt) {
                 busy = false;
+                setStorageResult(error, RED);
                 render();
-                addLogBox("Storage path: " + error);
                 return;
             }
 
             if (System.currentTimeMillis() < deadline) {
-                waitForCustomPathResult(command, sentAt, deadline);
+                waitForCustomPathResult(command, path, sentAt, deadline);
                 return;
             }
 
             busy = false;
-            render();
             String stage = bridge.getString("callback_stage_" + command, "");
             String detail = bridge.getString("stderr_" + command, "");
             StringBuilder b = new StringBuilder("Storage path callback timeout.")
-                    .append("\ncommand: ").append(command)
-                    .append("\ncallback: ").append(state)
-                    .append(" | stage: ").append(stage.isEmpty() ? "none" : stage)
-                    .append("\nsent_at: ").append(sentAt)
-                    .append(" | received_at: ").append(receivedAt);
-            if (detail != null && !detail.isEmpty()) b.append("\nSTDERR: ").append(detail);
-            addLogBox(b.toString());
+                    .append(" command=").append(command)
+                    .append(" callback=").append(state)
+                    .append(" stage=").append(stage.isEmpty() ? "none" : stage)
+                    .append(" sent_at=").append(sentAt)
+                    .append(" received_at=").append(receivedAt);
+            if (detail != null && !detail.isEmpty()) b.append(" stderr=").append(detail);
+            setStorageResult(b.toString(), RED);
+            render();
         }, 150L);
     }
+
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
 
     private boolean isMcpReady(JSONObject o) {
@@ -844,39 +902,6 @@ public class MainActivity extends Activity {
         addIndicator("MCP", isMcpReady(o), connectionFresh);
         addIndicator("Proxy", isProxyReady(o), connectionFresh);
         addIndicator("Tunnel", isTunnelReady(o), connectionFresh);
-    }
-
-    private void addBuildDiagnosticsCard() {
-        boolean termux = false;
-        try {
-            getPackageManager().getPackageInfo("com.termux", 0);
-            termux = true;
-        } catch (PackageManager.NameNotFoundException ignored) {}
-
-        boolean runGranted = checkSelfPermission("com.termux.permission.RUN_COMMAND")
-                == PackageManager.PERMISSION_GRANTED;
-        boolean bridgeReady = termux && runGranted;
-
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(10), dp(7), dp(10), dp(8));
-        box.setBackground(bg(CARD, BORDER, 13));
-
-        TextView h = text("Build & Bridge", 13, TEXT);
-        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        box.addView(h, new LinearLayout.LayoutParams(-1, dp(23)));
-
-        String commit = BuildConfig.GIT_COMMIT;
-        if (commit == null || commit.isEmpty()) commit = "unknown";
-
-        box.addView(text("Version  " + BuildConfig.VERSION_NAME + "   •   Build  " + BuildConfig.VERSION_CODE, 10, TEXT));
-        box.addView(text("Commit   " + commit, 10, TEXT));
-        box.addView(text("Android  SDK " + android.os.Build.VERSION.SDK_INT, 10, MUTED));
-        box.addView(text("Termux   " + (termux ? "DETECTED" : "NOT FOUND"), 10, termux ? GREEN : RED));
-        box.addView(text("RUN_COMMAND   " + (runGranted ? "GRANTED" : "DENIED"), 10, runGranted ? GREEN : RED));
-        box.addView(text("Bridge   " + (bridgeReady ? "READY" : "BLOCKED"), 10, bridgeReady ? GREEN : RED));
-
-        content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void addMonitorDiagnosticsCard() {
@@ -910,6 +935,27 @@ public class MainActivity extends Activity {
         v.setBackground(bg(CARD_SOFT, BORDER, 11));
         v.setOnClickListener(view -> showDiagnosticsDetail(event, callback, stage, sent, received, err));
         box.addView(v);
+
+        boolean termux = false;
+        try {
+            getPackageManager().getPackageInfo("com.termux", 0);
+            termux = true;
+        } catch (PackageManager.NameNotFoundException ignored) {}
+        boolean runGranted = checkSelfPermission("com.termux.permission.RUN_COMMAND")
+                == PackageManager.PERMISSION_GRANTED;
+        boolean bridgeReady = termux && runGranted;
+        String commit = BuildConfig.GIT_COMMIT == null || BuildConfig.GIT_COMMIT.isEmpty()
+                ? "unknown" : BuildConfig.GIT_COMMIT;
+        if (commit.length() > 8) commit = commit.substring(0, 8);
+        String buildLine = "Build " + BuildConfig.VERSION_NAME + " / #" + BuildConfig.VERSION_CODE
+                + "  •  " + commit
+                + "  •  SDK " + android.os.Build.VERSION.SDK_INT
+                + "  •  Termux " + (termux ? "✓" : "✕")
+                + "  •  RUN_COMMAND " + (runGranted ? "✓" : "✕")
+                + "  •  Bridge " + (bridgeReady ? "READY" : "BLOCKED");
+        TextView build = text(buildLine, 8, MUTED);
+        build.setPadding(dp(2), dp(6), dp(2), 0);
+        box.addView(build);
 
         content.addView(box, new LinearLayout.LayoutParams(-1, -2));
     }
