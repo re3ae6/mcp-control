@@ -595,11 +595,9 @@ public class MainActivity extends Activity {
     private int[] countStates() {
         int[] c = {0,0,0};
         if (policy == null) return c;
-        JSONObject caps = policy.optJSONObject("capabilities");
-        if (caps == null) return c;
         for (String g : groups) {
             if ("overview".equals(g)) continue;
-            JSONArray a = caps.optJSONArray(g);
+            JSONArray a = capabilitiesForGroup(g);
             if (a == null) continue;
             for (int i=0;i<a.length();i++) {
                 JSONObject x=a.optJSONObject(i);
@@ -612,6 +610,12 @@ public class MainActivity extends Activity {
             c[0]+=c[1]+c[2]; c[1]=0; c[2]=0;
         }
         return c;
+    }
+
+    private JSONArray capabilitiesForGroup(String name) {
+        if (policy == null) return null;
+        JSONObject caps = policy.optJSONObject("capabilities");
+        return caps == null ? null : caps.optJSONArray(name);
     }
 
     private void addCapabilityRow(JSONObject x, boolean locked) {
