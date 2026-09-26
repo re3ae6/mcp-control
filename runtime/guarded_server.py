@@ -5,6 +5,7 @@ import sys
 import base64
 import mimetypes
 from pathlib import Path
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -36,6 +37,18 @@ def _file_decisions(name, params):
 _original = mcp_core.call_tool
 _original_tool_list = mcp_core.tool_list
 
+_IMAGE_LIST_TOOL = {
+    "name": "image_list",
+    "description": "List image files currently present in a selected folder.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Selected image folder path"}
+        },
+        "required": ["path"]
+    },
+}
+
 _IMAGE_READ_TOOL = {
     "name": "image_read",
     "description": "Read an image file and return the actual image as MCP ImageContent.",
@@ -47,6 +60,30 @@ _IMAGE_READ_TOOL = {
         "required": ["input"]
     },
 }
+
+def _image_list_result(params):
+    raw = params.get("path", "") if isinstance(params, dict) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        return {"content": [{"type": "text", "text": "MCP CONTROL: missing image folder path"}], "isError": True}
+    folder = Path(raw).expanduser().resolve()
+    if not folder.is_dir():
+        return {"content": [{"type": "text", "text": f"MCP CONTROL: image folder not found: {folder}"}], "isError": True}
+    exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic", ".heif"}
+    images = []
+    for item in sorted(folder.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            if item.is_file() and item.suffix.lower() in exts:
+                images.append({
+                    "name": item.name,
+                    "path": str(item),
+                    "size": item.stat().st_size,
+                    "modified": item.stat().st_mtime,
+                })
+        except OSError:
+            continue
+    return {"content": [{"type": "text", "text": json.dumps(
+        {"ok": True, "folder": str(folder), "images": images}, ensure_ascii=False
+    )}]}
 
 def _image_read_result(params):
     raw = params.get("input", "") if isinstance(params, dict) else ""
@@ -64,6 +101,8 @@ def _image_read_result(params):
 def guarded_tool_list():
     result = _original_tool_list()
     tools = list(result.get("tools", []))
+    if not any(t.get("name") == "image_list" for t in tools):
+        tools.append(_IMAGE_LIST_TOOL)
     if not any(t.get("name") == "image_read" for t in tools):
         tools.append(_IMAGE_READ_TOOL)
     return {"tools": tools}
@@ -71,6 +110,18 @@ def guarded_tool_list():
 
 
 def guarded_call(session, name, params, on_progress=None):
+    if name == "image_list":
+        raw = params.get("path", "") if isinstance(params, dict) else ""
+        decisions = ["files.list", file_scope(Path(raw).expanduser().resolve())]
+        for required_cap in decisions:
+            d = check(required_cap)
+            if not d.allowed:
+                record(required_cap, f"mcp.tools/call:{name}", "DENY")
+                return {"content": [{"type": "text", "text": f"MCP CONTROL: access denied ({required_cap}); policy is active"}], "isError": True}
+        for required_cap in decisions:
+            record(required_cap, f"mcp.tools/call:{name}", "ALLOW")
+        return _image_list_result(params)
+
     if name == "image_read":
         raw = params.get("input", "") if isinstance(params, dict) else ""
         decisions = ["files.read", file_scope(Path(raw).expanduser().resolve())]
