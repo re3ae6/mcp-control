@@ -156,6 +156,14 @@ PY
       "$HOME/po_recorder/tools/connect_mcp.sh"
       ;;
     restart)
+      # Remove stale guarded-server instances from this MCP Control checkout only.
+      for pid in $(pgrep -f "guarded_server\.py" 2>/dev/null); do
+        cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || true)
+        case "$cwd" in
+          "$REPO") kill "$pid" 2>/dev/null || true ;;
+        esac
+      done
+      sleep 0.2
       env MCP_FORCE_RESTART=1 "$HOME/po_recorder/tools/connect_mcp.sh"
       ;;
     approvals)
