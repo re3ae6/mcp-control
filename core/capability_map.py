@@ -27,7 +27,12 @@ def file_scope(path):
     return "dangerous.outside_allowlist"
 def file_capabilities_for_path(name,path):
     cap=FILE_TOOLS.get(name)
-    return [] if not cap else [cap,file_scope(path)]
+    if not cap: return []
+    scope=file_scope(path)
+    # A user-selected custom root is the explicit file-access boundary.
+    # files.custom grants ordinary file operations inside that root.
+    if scope == "files.custom": return ["files.custom"]
+    return [cap,scope]
 
 
 # Policy capabilities that are intentionally control-only/reserved until a real
