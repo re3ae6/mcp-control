@@ -66,5 +66,16 @@ public class PluginResultsService extends IntentService {
              .putLong("received_at_" + command, now);
         }
         e.apply();
+
+        // Push status results to the live monitor immediately instead of making
+        // the UI wait for its polling timeout.
+        if ("status".equals(command) && stdout != null && !stdout.isEmpty()) {
+            try {
+                Intent update = new Intent(this, ConnectionMonitorService.class)
+                        .setAction(ConnectionMonitorService.ACTION_STATUS_UPDATE)
+                        .putExtra("status_json", stdout);
+                startService(update);
+            } catch (RuntimeException ignored) {}
+        }
     }
 }
