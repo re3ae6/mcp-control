@@ -108,10 +108,8 @@ def guarded_call(session,name,params,on_progress=None):
                             return {'content':[{'type':'text','text':f'MCP CONTROL: access denied ({cap}); policy is active'}],'isError':True}
                     for cap in decisions:
                         record(cap,f'mcp.tools/call:{name}','ALLOW')
-                    preview = _image_text_preview(path)
-                    if preview:
-                        return {'content':[{'type':'text','text':f'Image: {path.name}\\nPreview (72x40 grayscale):\\n{preview}'}]}
-                    return {'content':[{'type':'text','text':f'Image: {path.name}\\nImageContent is available through image_read, but this read client only accepts text output.'}]}
+                    data = base64.b64encode(data).decode('ascii')
+                    return {'content':[{'type':'resource','resource':{'uri':f'mcp-control://image/{path.name}','mimeType':_image_mime(path.read_bytes(),path.name),'blob':data}}]}
             except OSError:
                 pass
     if name=='image_list':
