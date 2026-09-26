@@ -34,6 +34,8 @@ public class MainActivity extends Activity {
     private String group = "overview";
     private boolean busy = false;
     private boolean connectionOk = false;
+    private static final int STORAGE_FOLDER_REQUEST = 5101;
+    private android.widget.EditText storagePathField;
     private boolean connectionFresh = false;
     private JSONObject lastConnectionStatus;
     private long connectionSnapshotAt = 0L;
@@ -678,15 +680,28 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         final android.widget.EditText path = new android.widget.EditText(this);
+        storagePathField = path;
         path.setSingleLine(true); path.setTextSize(12);
         path.setHint("/storage/emulated/0/Downloads");
         path.setPadding(dp(10), 0, dp(10), 0);
         path.setBackground(bg(CARD_SOFT, BORDER, 10));
         row.addView(path, new LinearLayout.LayoutParams(0, dp(42), 1));
-        Button add = button("Add path", v -> { String p = path.getText().toString().trim(); if (!p.isEmpty()) runCustomPath("add_path", p); });
-        add.setEnabled(!locked && !busy); add.setBackground(bg(TEXT, TEXT, 17)); add.setTextColor(Color.WHITE);
-        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(92), dp(42)); ap.setMargins(dp(6),0,0,0);
-        row.addView(add, ap); box.addView(row);
+
+        Button browse = button("Browse", v -> openStorageFolderPicker());
+        browse.setEnabled(!locked && !busy);
+        browse.setBackground(bg(CARD_SOFT, BORDER, 17));
+        browse.setTextColor(TEXT);
+        LinearLayout.LayoutParams br = new LinearLayout.LayoutParams(dp(72), dp(42));
+        br.setMargins(dp(6), 0, 0, 0);
+        row.addView(browse, br);
+
+        Button add = button("Add", v -> { String p = path.getText().toString().trim(); if (!p.isEmpty()) runCustomPath("add_path", p); });
+        add.setEnabled(!locked && !busy);
+        add.setBackground(bg(TEXT, TEXT, 17)); add.setTextColor(Color.WHITE);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(64), dp(42));
+        ap.setMargins(dp(6), 0, 0, 0);
+        row.addView(add, ap);
+        box.addView(row);
         JSONArray paths = policy == null ? null : policy.optJSONArray("custom_paths");
         if (paths != null) for (int i=0; i<paths.length(); i++) {
             final String p = paths.optString(i, ""); if (p.isEmpty()) continue;
@@ -695,6 +710,47 @@ public class MainActivity extends Activity {
             Button rm = button("Remove", v -> runCustomPath("remove_path", p)); rm.setEnabled(!locked && !busy); rm.setTextSize(9);
             pr.addView(rm, new LinearLayout.LayoutParams(dp(72), dp(30))); box.addView(pr);
         }
+    }
+
+    private void openStorageFolderPicker() {
+        try {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(i, STORAGE_FOLDER_REQUEST);
+        } catch (RuntimeException e) {
+            addLogBox("Browse: " + e.getMessage());
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != STORAGE_FOLDER_REQUEST || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        android.net.Uri uri = data.getData();
+        try {
+            int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            if (takeFlags != 0) getContentResolver().takePersistableUriPermission(uri, takeFlags);
+        } catch (RuntimeException ignored) {}
+        String path = uriToStoragePath(uri);
+        if (path != null && storagePathField != null) storagePathField.setText(path);
+    }
+
+    private String uriToStoragePath(android.net.Uri uri) {
+        if (uri == null) return null;
+        if ("com.android.externalstorage.documents".equals(uri.getAuthority())) {
+            String docId = android.provider.DocumentsContract.getTreeDocumentId(uri);
+            if (docId != null) {
+                int colon = docId.indexOf(':');
+                if (colon > 0) {
+                    String volume = docId.substring(0, colon);
+                    String relative = docId.substring(colon + 1);
+                    if ("primary".equalsIgnoreCase(volume)) {
+                        return relative.isEmpty() ? "/storage/emulated/0" : "/storage/emulated/0/" + relative;
+                    }
+                    return relative.isEmpty() ? "/storage/" + volume : "/storage/" + volume + "/" + relative;
+                }
+            }
+        }
+        return null;
     }
 
     private void runCustomPath(String command, String path) {
