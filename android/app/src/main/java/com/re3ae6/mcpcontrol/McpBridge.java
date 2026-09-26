@@ -31,6 +31,29 @@ public final class McpBridge {
             return false;
         }
 
+        // Android requires the Termux-defined RUN_COMMAND permission to be
+        // explicitly granted to this app. Check before sending so a missing grant
+        // never reaches startService()/startForegroundService() as a SecurityException.
+        final String runCommandPermission = "com.termux.permission.RUN_COMMAND";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && context.checkSelfPermission(runCommandPermission)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            prefs.edit()
+                    .putString("last_error",
+                            "Termux permission required: allow 'Run commands in Termux environment' for MCP Control.")
+                    .putLong("last_error_at", System.currentTimeMillis())
+                    .apply();
+            try {
+                Intent settings = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                settings.setData(android.net.Uri.parse("package:" + context.getPackageName()));
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(settings);
+            } catch (RuntimeException ignored) {
+                // The error is already persisted for the UI/log.
+            }
+            return false;
+        }
+
         Intent i = new Intent("com.termux.RUN_COMMAND");
         i.setComponent(new ComponentName("com.termux", "com.termux.app.RunCommandService"));
         i.putExtra("com.termux.RUN_COMMAND_PATH",
