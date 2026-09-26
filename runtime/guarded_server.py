@@ -60,6 +60,8 @@ def guarded_call(session, name, params, on_progress=None):
         }
 
     if ask_capabilities:
+        # Bundle order is canonical so approval digests and mocks are deterministic.
+        ask_capabilities = sorted(set(ask_capabilities))
         approval_id = params.get("approval_id") if isinstance(params, dict) else None
         clean_params = dict(params) if isinstance(params, dict) else {}
         clean_params.pop("approval_id", None)
