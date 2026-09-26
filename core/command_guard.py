@@ -4,7 +4,7 @@ from __future__ import annotations
 import os, re, shlex
 from pathlib import Path
 
-ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control"))
+ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control", "~/.config/mcp-control"))
 PO_RECORDER_ROOT = Path(os.path.expanduser("~/po_recorder")).resolve()
 BLOCKED_PREFIXES = ("/sdcard", "/storage", "/system", "/vendor", "/proc", "/sys", "/dev")
 DANGEROUS = {"rmdir", "unlink", "shred", "chmod", "chown", "kill", "pkill", "killall", "su", "sudo", "termux-api"}
