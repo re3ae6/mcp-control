@@ -3,6 +3,7 @@
 from __future__ import annotations
 import os, re, shlex
 from pathlib import Path
+from .policy import canonical_runtime_path
 
 ALLOWED_ROOTS = tuple(Path(os.path.expanduser(x)).resolve() for x in ("~/po_recorder", "~/mcp-control", "~/.config/mcp-control"))
 PO_RECORDER_ROOT = Path(os.path.expanduser("~/po_recorder")).resolve()
@@ -13,7 +14,7 @@ INTERPRETERS = {"python", "python3", "python3.14", "perl", "ruby", "node", "php"
 CODE_FLAGS = {"-c", "-e", "--eval", "--command"}
 
 def _custom_inside(path: Path) -> bool:
-    rp = path.resolve()
+    rp = canonical_runtime_path(path)
     try:
         from .policy import load_policy, decision
         policy = load_policy()
@@ -28,7 +29,7 @@ def _custom_inside(path: Path) -> bool:
     return False
 
 def _inside(path: Path) -> bool:
-    rp = path.resolve()
+    rp = canonical_runtime_path(path)
     return _custom_inside(rp) or any(rp == root or root in rp.parents for root in ALLOWED_ROOTS)
 
 def _looks_like_path(token: str) -> bool:
@@ -60,9 +61,10 @@ def authorize_command(command: str) -> tuple[bool, str]:
     for tok in tokens:
         if not _looks_like_path(tok): continue
         expanded = os.path.expanduser(tok)
+        normalized = str(canonical_runtime_path(expanded)) if expanded.startswith("~/storage/shared") or expanded == "/sdcard" or expanded.startswith("/sdcard/") else expanded
         if "://" in expanded: continue
-        if any(expanded == x or expanded.startswith(x + "/") for x in BLOCKED_PREFIXES): return False, f"path outside allowlist: {expanded}"
-        p = Path(expanded)
+        if any(normalized == x or normalized.startswith(x + "/") for x in BLOCKED_PREFIXES): return False, f"path outside allowlist: {expanded}"
+        p = Path(normalized)
         if p.is_absolute() and not _inside(p): return False, f"absolute path outside allowlist: {expanded}"
         if not p.is_absolute() and any(part == ".." for part in p.parts): return False, f"path traversal is not allowed: {tok}"
     return True, "ok"
