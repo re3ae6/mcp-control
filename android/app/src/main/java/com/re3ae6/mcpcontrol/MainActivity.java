@@ -780,10 +780,6 @@ public class MainActivity extends Activity {
                 setStorageResult("Choose a folder or enter its absolute phone path.", RED);
                 return;
             }
-            if (!(p.startsWith("/storage/emulated/0/") || p.startsWith("/sdcard/"))) {
-                setStorageResult("Storage path must be inside /storage/emulated/0 or /sdcard.", RED);
-                return;
-            }
             runCustomPath("add_path", p);
         });
         add.setEnabled(!locked && !busy);
