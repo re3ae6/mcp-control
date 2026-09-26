@@ -754,9 +754,38 @@ public class MainActivity extends Activity {
     }
 
     private void runCustomPath(String command, String path) {
-        if (busy) return; busy = true;
-        try { McpBridge.run(this, command, path); handler.postDelayed(() -> { busy=false; refresh(); }, 700L); }
-        catch (RuntimeException e) { busy=false; addLogBox("Storage path: " + e.getMessage()); }
+        if (busy) return;
+        busy = true;
+        status.setText("●  Saving…");
+        status.setTextColor(YELLOW);
+        clearOutput();
+        clearCommandResult(command);
+        try {
+            if (!McpBridge.run(this, command, path)) {
+                busy = false;
+                addLogBox("Storage path: could not start " + command + ".");
+                render();
+                return;
+            }
+            final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                    .getLong("sent_at_" + command, System.currentTimeMillis());
+            handler.postDelayed(() -> {
+                String error = commandError(command);
+                long receivedAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                        .getLong("received_at_" + command, 0L);
+                if (!error.isEmpty() && receivedAt >= sentAt) {
+                    busy = false;
+                    render();
+                    addLogBox("Storage path: " + error);
+                    return;
+                }
+                loadPolicyAndFinish();
+            }, 700L);
+        } catch (RuntimeException e) {
+            busy = false;
+            render();
+            addLogBox("Storage path: " + e.getMessage());
+        }
     }
     private int indexOf(String g){for(int i=0;i<groups.length;i++)if(groups[i].equals(g))return i;return 0;}
 
