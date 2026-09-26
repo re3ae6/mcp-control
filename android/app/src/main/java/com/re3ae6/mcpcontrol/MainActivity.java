@@ -38,6 +38,8 @@ public class MainActivity extends Activity {
     private android.widget.EditText storagePathField;
     private String storageSelectedPath = "";
     private TextView storageResult;
+    private LinearLayout imageHost;
+    private String imageFolder = "";
     private String storageResultMessage = "";
     private int storageResultColor = MUTED;
     private boolean connectionFresh = false;
@@ -570,6 +572,7 @@ public class MainActivity extends Activity {
 
         if ("files".equals(group)) {
             addSelectedFolderCard(locked);
+            addImageWorkspaceCard(locked);
             addPathScopesCard(locked);
             return;
         }
@@ -850,6 +853,184 @@ public class MainActivity extends Activity {
             String scope = selectedFolderScopeText(paths);
             addScopedFileCapabilityRow(box, id, fileOperationLabel(id), scope, locked);
         }
+    }
+
+    private void addImageWorkspaceCard(boolean locked) {
+        addSectionHeader("Image Workspace", locked ? "MASTER LOCK" : "Inspect images in the selected folder");
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(7), dp(10), dp(8));
+        box.setBackground(bg(CARD, BORDER, 12));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(0, dp(3), 0, dp(5));
+        content.addView(box, bp);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = text("Images", 12, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        top.addView(title, new LinearLayout.LayoutParams(0, dp(30), 1));
+        Button refresh = button("Refresh", v -> refreshImages());
+        refresh.setEnabled(!locked && !busy);
+        refresh.setBackground(bg(CARD_SOFT, BORDER, 17));
+        top.addView(refresh, new LinearLayout.LayoutParams(dp(82), dp(36)));
+        box.addView(top);
+
+        imageHost = new LinearLayout(this);
+        imageHost.setOrientation(LinearLayout.VERTICAL);
+        box.addView(imageHost, new LinearLayout.LayoutParams(-1, -2));
+
+        imageFolder = storageSelectedPath;
+        renderImageList(locked, null);
+        if (!locked && !imageFolder.isEmpty()) handler.postDelayed(this::refreshImages, 80L);
+    }
+
+    private void renderImageList(boolean locked, JSONArray images) {
+        if (imageHost == null) return;
+        imageHost.removeAllViews();
+        if (imageFolder == null || imageFolder.isEmpty()) {
+            imageHost.addView(text("Select a phone folder above first.", 9, MUTED));
+            return;
+        }
+        TextView scope = text("Scope  •  " + imageFolder, 8, MUTED);
+        scope.setPadding(dp(2), dp(4), dp(2), dp(5));
+        imageHost.addView(scope);
+
+        if (images == null) {
+            imageHost.addView(text("Tap Refresh to scan for PNG / JPG / WEBP images.", 9, MUTED));
+            return;
+        }
+        if (images.length() == 0) {
+            imageHost.addView(text("No images found in this folder.", 9, MUTED));
+            return;
+        }
+        for (int i = 0; i < images.length(); i++) {
+            JSONObject x = images.optJSONObject(i);
+            if (x == null) continue;
+            String name = x.optString("name", "image");
+            String path = x.optString("path", "");
+            long size = x.optLong("size", 0L);
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(3), 0, dp(3));
+
+            TextView n = text("▧  " + name + "\n     " + formatBytes(size), 10, TEXT);
+            n.setSingleLine(false);
+            row.addView(n, new LinearLayout.LayoutParams(0, dp(46), 1));
+
+            Button info = button("Info", v -> runImageCommand("image_info", path));
+            info.setEnabled(!locked && !busy);
+            info.setTextSize(10);
+            info.setBackground(bg(CARD_SOFT, BORDER, 15));
+            row.addView(info, new LinearLayout.LayoutParams(dp(58), dp(36)));
+
+            Button ocr = button("OCR", v -> runImageCommand("image_ocr", path));
+            ocr.setEnabled(!locked && !busy);
+            ocr.setTextSize(10);
+            ocr.setBackground(bg(CARD_SOFT, BORDER, 15));
+            LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(dp(58), dp(36));
+            op.setMargins(dp(5), 0, 0, 0);
+            row.addView(ocr, op);
+            imageHost.addView(row);
+        }
+    }
+
+    private String formatBytes(long n) {
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return String.format(java.util.Locale.US, "%.1f KB", n / 1024.0);
+        return String.format(java.util.Locale.US, "%.1f MB", n / (1024.0 * 1024.0));
+    }
+
+    private void refreshImages() {
+        if (busy || storageSelectedPath == null || storageSelectedPath.isEmpty()) return;
+        imageFolder = storageSelectedPath;
+        busy = true;
+        renderImageList(false, null);
+        if (!McpBridge.run(this, "image_list", imageFolder)) {
+            busy = false;
+            render();
+            return;
+        }
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_image_list", System.currentTimeMillis());
+        waitForImageList(sentAt, System.currentTimeMillis() + 8000L);
+    }
+
+    private void waitForImageList(long sentAt, long deadline) {
+        handler.postDelayed(() -> {
+            android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+            long received = bridge.getLong("received_at_image_list", 0L);
+            String state = bridge.getString("callback_state_image_list", "unknown");
+            if (received >= sentAt && "received".equals(state)) {
+                busy = false;
+                int exit = bridge.getInt("exit_image_list", -1);
+                if (exit == 0) {
+                    try {
+                        JSONArray arr = new JSONObject(bridge.getString("stdout_image_list", "{\"images\":[]}"))
+                                .optJSONArray("images");
+                        renderImageList(false, arr == null ? new JSONArray() : arr);
+                    } catch (Exception e) {
+                        renderImageList(false, new JSONArray());
+                    }
+                }
+                return;
+            }
+            if (System.currentTimeMillis() < deadline) {
+                waitForImageList(sentAt, deadline);
+            } else {
+                busy = false;
+                render();
+            }
+        }, 150L);
+    }
+
+    private void runImageCommand(String command, String path) {
+        if (busy || path == null || path.isEmpty()) return;
+        busy = true;
+        if (!McpBridge.run(this, command, path)) {
+            busy = false;
+            render();
+            return;
+        }
+        final long sentAt = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("sent_at_" + command, System.currentTimeMillis());
+        waitForImageCommand(command, sentAt, System.currentTimeMillis() + 10000L);
+    }
+
+    private void waitForImageCommand(String command, long sentAt, long deadline) {
+        handler.postDelayed(() -> {
+            android.content.SharedPreferences bridge = getSharedPreferences("bridge", MODE_PRIVATE);
+            long received = bridge.getLong("received_at_" + command, 0L);
+            String state = bridge.getString("callback_state_" + command, "unknown");
+            if (received >= sentAt && "received".equals(state)) {
+                busy = false;
+                String out = bridge.getString("stdout_" + command, "");
+                String err = bridge.getString("stderr_" + command, "");
+                showImageResult(command, out.isEmpty() ? err : out);
+                render();
+                return;
+            }
+            if (System.currentTimeMillis() < deadline) {
+                waitForImageCommand(command, sentAt, deadline);
+            } else {
+                busy = false;
+                render();
+            }
+        }, 150L);
+    }
+
+    private void showImageResult(String command, String raw) {
+        String title = "image_info".equals(command) ? "Image info" : "OCR result";
+        String body = raw == null || raw.isEmpty() ? "No result." : raw;
+        TextView tv = text(body, 11, TEXT);
+        tv.setTextIsSelectable(true);
+        tv.setPadding(dp(10), dp(8), dp(10), dp(8));
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(tv)
+                .setPositiveButton("Close", null)
+                .show();
     }
 
     private String selectedFolderScopeText(JSONArray paths) {
