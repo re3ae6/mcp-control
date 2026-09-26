@@ -21,6 +21,16 @@ def _validate_policy(data: dict[str, Any]) -> None:
     custom_paths = data.get("custom_paths", [])
     if not isinstance(custom_paths, list) or any(not isinstance(x, str) or not x.startswith("/") for x in custom_paths):
         raise ValueError("custom_paths_invalid")
+    shared_roots = (Path("/storage/emulated/0").resolve(), Path("/sdcard").resolve())
+    for raw in custom_paths:
+        try:
+            root = Path(raw).expanduser().resolve(strict=False)
+        except OSError as exc:
+            raise ValueError("custom_paths_invalid") from exc
+        if root in shared_roots:
+            raise ValueError("custom_path_must_be_specific_folder")
+        if not any(shared == root or shared in root.parents for shared in shared_roots):
+            raise ValueError("custom_path_outside_shared_storage")
     capabilities = data.get("capabilities")
     if not isinstance(capabilities, dict):
         raise ValueError("capabilities_invalid")
