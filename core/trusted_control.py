@@ -48,12 +48,13 @@ def set_capability(capability_id: str, state: str) -> None:
 
 
 def _sync_custom_storage_capabilities(policy: dict[str, Any]) -> None:
-    """Enable selected-folder scope, never the broader shared-storage scope."""
+    """Selected folders get ordinary file operations; broader storage remains denied."""
     allowed = bool(policy.get("custom_paths"))
-    try:
-        set_state(policy, "files.custom", "allow" if allowed else "deny")
-    except KeyError:
-        pass
+    for capability_id in ("files.custom", "files.read", "files.write", "files.list", "files.search"):
+        try:
+            set_state(policy, capability_id, "allow" if allowed else "deny")
+        except KeyError:
+            pass
 
 
 def add_custom_path(path: str) -> None:
