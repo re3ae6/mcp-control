@@ -155,6 +155,31 @@ class SecurityMatrixTests(unittest.TestCase):
         self.assertTrue(recovered["master_lock"])
         self.assertEqual(recovered.get("custom_paths", []), [])
 
+    def test_sdcard_alias_is_canonicalized_to_primary_shared_storage(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        policy.save_policy(p)
+        trusted_control.add_custom_path("/sdcard/Download/chatgpt")
+        stored = policy.load_policy()["custom_paths"]
+        self.assertEqual(stored, ["/storage/emulated/0/Download/chatgpt"])
+        self.assertEqual(
+            file_capabilities_for_path(
+                "read",
+                "/storage/emulated/0/Download/chatgpt/photo.png",
+            ),
+            ["files.read", "files.custom"],
+        )
+
+    def test_selected_folder_can_be_any_subfolder_in_shared_storage(self):
+        p = policy.load_policy()
+        p["master_lock"] = False
+        policy.save_policy(p)
+        trusted_control.add_custom_path("/storage/emulated/0/Download/SomeOtherFolder")
+        self.assertEqual(
+            policy.load_policy()["custom_paths"],
+            ["/storage/emulated/0/Download/SomeOtherFolder"],
+        )
+
     def test_selected_folder_root_cannot_be_granted(self):
         p = policy.load_policy()
         p["master_lock"] = False
