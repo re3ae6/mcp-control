@@ -745,6 +745,7 @@ public class MainActivity extends Activity {
             rm.setTextSize(10);
             rm.setTextColor(RED);
             rm.setBackgroundColor(Color.TRANSPARENT);
+            rm.setGravity(Gravity.CENTER);
             rm.setPadding(0, 0, 0, 0);
             rm.setMinWidth(0);
             rm.setMinimumWidth(0);
